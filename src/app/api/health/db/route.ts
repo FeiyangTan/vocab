@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
-import { db } from '@/db';
+import { getDb } from '@/db';
 import { inbox } from '@/db/schema';
 
 /**
@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const [row] = await db.select({ count: sql<number>`count(*)::int` }).from(inbox);
+    const [row] = await getDb().select({ count: sql<number>`count(*)::int` }).from(inbox);
     return NextResponse.json({ ok: true, inboxCount: row.count });
   } catch (error) {
     return NextResponse.json({ ok: false, error: String(error) }, { status: 500 });
