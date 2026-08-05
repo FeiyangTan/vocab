@@ -2,6 +2,8 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
+import { ContrastRow } from '@/components/contrast-row';
+import { speak } from '@/lib/speak';
 import { GRADES } from '@/lib/sm2';
 
 type Card = {
@@ -10,6 +12,8 @@ type Card = {
   lemma: string;
   note: string | null;
   rawText: string;
+  wordId: number;
+  contrasts: string[];
 };
 
 /**
@@ -17,6 +21,9 @@ type Card = {
  *
  * 每答一张立刻 POST 回服务端再取下一张 —— iOS 上 PWA 后台会被系统清掉，
  * 进度攒在内存里等结束再提交的话，切个 App 回来就没了。
+ *
+ * 对比词**只在背面显示**：正面是填空题，把相似词摆出来会退化成多选题，
+ * 削弱开放回忆的效果。背面的作用是「答完之后提醒你别和 X 搞混」。
  */
 export function ReviewSession({ domain }: { domain: 'work' | 'daily' }) {
   const [card, setCard] = useState<Card | null>(null);
@@ -59,18 +66,14 @@ export function ReviewSession({ domain }: { domain: 'work' | 'daily' }) {
     await load();
   }
 
-  function speak() {
-    if (!card || typeof window === 'undefined' || !window.speechSynthesis) return;
-    const u = new SpeechSynthesisUtterance(card.lemma);
-    u.lang = 'en-US';
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(u);
-  }
-
   // 键盘：空格翻面，1–4 评分
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (!card) return;
+      // 正在输入对比词时不要抢键 —— 否则打 "courtesy" 里的字符会误触发评分
+      const el = document.activeElement;
+      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) return;
+
       if (e.code === 'Space') {
         e.preventDefault();
         setFlipped((f) => !f);
@@ -109,23 +112,32 @@ export function ReviewSession({ domain }: { domain: 'work' | 'daily' }) {
       ) : (
         <>
           <div className="flex flex-1 flex-col justify-center gap-8">
-            {/* 正面：挖空原句 */}
+            {/* 正面：挖空原句。对比词绝不出现在这里 */}
             <p className="text-center text-xl leading-relaxed">{card.clozeText}</p>
 
-            {/* 背面 */}
             {flipped ? (
               <div className="space-y-4 rounded-xl border border-black/10 p-4 dark:border-white/15">
                 <div className="flex items-center justify-center gap-3">
                   <span className="text-2xl font-medium">{card.lemma}</span>
                   <button
-                    onClick={speak}
+                    onClick={() => speak(card.lemma)}
                     aria-label="发音"
                     className="rounded-full border border-black/15 px-2.5 py-1 text-sm dark:border-white/20"
                   >
                     🔊
                   </button>
                 </div>
+
                 {card.note && <p className="text-center text-base">{card.note}</p>}
+
+                <div className="border-t border-black/10 pt-3 dark:border-white/15">
+                  <ContrastRow
+                    wordId={card.wordId}
+                    contrasts={card.contrasts}
+                    onChange={(next) => setCard({ ...card, contrasts: next })}
+                  />
+                </div>
+
                 <p className="border-t border-black/10 pt-3 text-center text-sm opacity-50 dark:border-white/15">
                   {card.rawText}
                 </p>

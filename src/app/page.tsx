@@ -1,14 +1,14 @@
 import { eq, lte, sql } from 'drizzle-orm';
 import Link from 'next/link';
 import { getDb } from '@/db';
-import { cards, inbox } from '@/db/schema';
+import { cards, inbox, words } from '@/db/schema';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Home() {
   const db = getDb();
 
-  const [[{ count: pending }], [{ count: due }]] = await Promise.all([
+  const [[{ count: pending }], [{ count: due }], [{ count: wordCount }]] = await Promise.all([
     db
       .select({ count: sql<number>`count(*)::int` })
       .from(inbox)
@@ -17,6 +17,7 @@ export default async function Home() {
       .select({ count: sql<number>`count(*)::int` })
       .from(cards)
       .where(lte(cards.due, new Date())),
+    db.select({ count: sql<number>`count(*)::int` }).from(words),
   ]);
 
   return (
@@ -29,6 +30,7 @@ export default async function Home() {
         label="收集箱"
         detail={pending > 0 ? `${pending} 条待整理` : '空的'}
       />
+      <Entry href="/words" label="词汇" detail={`${wordCount} 个`} />
     </main>
   );
 }

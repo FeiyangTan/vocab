@@ -27,6 +27,9 @@ export async function GET(request: Request) {
       lemma: words.lemma,
       note: encounters.note,
       rawText: encounters.rawText,
+      // 前端要 wordId 才能调 PUT /api/words/{id}/contrasts 就地添加对比词
+      wordId: words.id,
+      contrasts: words.contrasts,
     })
     .from(cards)
     .innerJoin(encounters, eq(cards.encounterId, encounters.id))

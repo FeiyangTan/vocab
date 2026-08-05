@@ -73,6 +73,14 @@ export const words = pgTable(
     lemma: text('lemma').notNull(),
     /** 复习队列按 domain 分开 */
     domain: wordDomain('domain').notNull(),
+    /**
+     * 对比词：拼写或读音相近、容易记混的词（cursory / cursor / courtesy）。
+     *
+     * **纯人工填，AI 不碰** —— 哪两个词会互相干扰是极度个人化的，只有本人知道
+     * 自己栽在哪一对上。挂在 word 而不是 encounter 上，因为混淆是词本身的属性，
+     * 同一个词的多次 encounter 应该共享同一组对比词。
+     */
+    contrasts: jsonb('contrasts').$type<string[]>().notNull().default([]),
     createdAt: createdAt(),
   },
   (t) => [index('words_lemma_idx').on(t.lemma)],
