@@ -81,6 +81,7 @@ function ReviewCard({ item, onDone }: { item: Item; onDone: () => void }) {
   const [lemma, setLemma] = useState(d.lemma);
   const [definition, setDefinition] = useState(d.definition);
   const [domain, setDomain] = useState<'work' | 'daily'>(d.domain);
+  const [sentence, setSentence] = useState(d.sentence ?? item.rawText);
   const [cloze, setCloze] = useState(d.cloze);
   const [pending, setPending] = useState<'confirm' | 'discard' | null>(null);
   const [error, setError] = useState('');
@@ -95,7 +96,15 @@ function ReviewCard({ item, onDone }: { item: Item; onDone: () => void }) {
       headers: { 'Content-Type': 'application/json' },
       body:
         kind === 'confirm'
-          ? JSON.stringify({ target, lemma, definition, domain, cloze })
+          ? JSON.stringify({
+              target,
+              lemma,
+              definition,
+              domain,
+              sentence,
+              cloze,
+              generated: d.generated ?? false,
+            })
           : '{}',
     });
     if (response.ok) {
@@ -142,13 +151,28 @@ function ReviewCard({ item, onDone }: { item: Item; onDone: () => void }) {
 
         <div>
           <div className="mb-1 text-xs opacity-50">
+            例句
+            {d.generated && (
+              <span className="ml-2 text-amber-600">⚠ AI 造的，不是你真实遇到的语境</span>
+            )}
+          </div>
+          <textarea
+            value={sentence}
+            onChange={(e) => setSentence(e.target.value)}
+            rows={2}
+            className="w-full rounded-lg border border-black/15 px-3 py-2 text-sm dark:border-white/20"
+          />
+        </div>
+
+        <div>
+          <div className="mb-1 text-xs opacity-50">
             挖空（复习时的正面）
-            {noContext && <span className="ml-2 text-amber-600">⚠ 没有语境，无法挖空</span>}
+            {noContext && <span className="ml-2 text-amber-600">⚠ 没挖空</span>}
           </div>
           <textarea
             value={cloze}
             onChange={(e) => setCloze(e.target.value)}
-            rows={3}
+            rows={2}
             className="w-full rounded-lg border border-black/15 px-3 py-2 text-sm dark:border-white/20"
           />
         </div>

@@ -22,34 +22,50 @@ export type ProcessOutput = Draft & { id: number };
 
 const SYSTEM = `你在帮一个中文母语者整理他的英语生词本。
 
-他会在阅读时把遇到生词的**整句话**存下来。你的任务是把每条原始文本拆成五个字段，供他复核后做成填空复习卡。
+他存进来的可能是**遇到生词的整句话**，也可能只是**一个孤立的单词或短语**。
+你的任务是把每条原始文本变成七个字段，供他复核后做成填空复习卡。
 
-对每一条，输出：
+先判断这一条属于哪种情况，再按对应规则处理：
 
-1. **target** —— 目标词在原句里的**实际形态**（原句写 "glancing" 就填 "glancing"，不要改）。
-   一句话里可能有好几个词他都不认识；挑**最可能是生词的那一个**（更少见、更学术、更专业的那个）。
-   这只是猜测，他会复核后修改，所以宁可选一个明确的，不要含糊。
+## 情况 A：原始文本包含完整句子
+
+- **sentence** —— 从原文里提取出**那一句**。原样复制，一个字符都不要改。
+  原始文本常带噪音（网页分享带来的标题、URL、排版折行、多余空白），把噪音去掉，
+  只留那句英文本身。
+- **generated** —— \`false\`
+
+## 情况 B：原始文本只是一个孤立单词或短语（没有句子）
+
+- **sentence** —— **你来造一个例句**，把这个词自然地用进去。要求：
+  - 日常自然的英文，10–20 词
+  - **上下文必须让人能推断出这个词的意思** —— 这是填空卡的全部意义。
+    造 "I saw a cursory." 这种句子等于没造，因为挖空之后没有任何线索。
+    要造 "She gave the contract only a cursory look before signing it." 这种，
+    周围的词能撑起词义。
+  - 用这个词**最常见**的义项
+  - 不要用生僻词堆砌，句子本身不该再制造新的生词
+- **generated** —— \`true\`
+
+## 两种情况都要输出的字段
+
+1. **target** —— 目标词在 sentence 里的**实际形态**（句子里写 "glancing" 就填 "glancing"，不要还原）。
+   情况 A 下一句话里可能有好几个词他都不认识；挑**最可能是生词的那一个**
+   （更少见、更学术、更专业的那个）。这只是猜测，他会复核后修改，
+   所以宁可选一个明确的，不要含糊。
 
 2. **lemma** —— target 的词形还原（"glancing" → "glance"，"cursory" → "cursory"）。
 
 3. **definition** —— 中文释义，**简短**，只给这个词在**这个语境下**的意思。
-   不要给例句（原句本身就是例句），不要罗列该词的其他义项，不要写词性标注。
+   不要给例句（sentence 本身就是例句），不要罗列其他义项，不要写词性标注。
    多个近义中文词用分号隔开，例如：匆匆的；粗略的
 
 4. **domain** —— "work" 或 "daily"。
    work = 工作、技术、商业、学术语境；daily = 生活、社交、新闻、娱乐语境。
-   判断依据首先是句子内容本身。source 字段是次要线索："mac" 多半是他在电脑前工作时遇到的，
-   "ios-share" 多半是手机上随便刷到的 —— 但内容和 source 冲突时以内容为准。
+   判断依据首先是内容本身。source 字段是次要线索："mac" / "web" 多半是他在电脑前
+   工作时遇到的，"ios-share" 多半是手机上随便刷到的 —— 内容和 source 冲突时以内容为准。
 
-5. **cloze** —— **原句原样复制，只把 target 替换成三个下划线 \`___\`**，其余一个字符都不要改
-   （标点、大小写、换行全部保留）。
-
-**特殊情况：原始文本只是一个孤立的单词或短语，没有句子。**
-这时 cloze 就填那个词本身（不挖空）—— 没有语境可挖。definition 照给，按该词最常见的意思。
-这样审核页能直接看出这条缺语境。
-
-**原始文本可能带噪音**（网页分享带过来的标题、URL、多余空白）。忽略噪音，
-从中找出那句真正的英文。cloze 基于那句话，不要把 URL 之类的东西复制进去。`;
+5. **cloze** —— **把 sentence 原样复制，只把 target 替换成三个下划线 \`___\`**，
+   其余一个字符都不要改（标点、大小写全部保留）。`;
 
 const SCHEMA = {
   type: 'object',
@@ -64,9 +80,20 @@ const SCHEMA = {
           lemma: { type: 'string' },
           definition: { type: 'string' },
           domain: { type: 'string', enum: ['work', 'daily'] },
+          sentence: { type: 'string', description: '挖空前的完整句子' },
           cloze: { type: 'string' },
+          generated: { type: 'boolean', description: 'sentence 是否由你造出来的' },
         },
-        required: ['id', 'target', 'lemma', 'definition', 'domain', 'cloze'],
+        required: [
+          'id',
+          'target',
+          'lemma',
+          'definition',
+          'domain',
+          'sentence',
+          'cloze',
+          'generated',
+        ],
         additionalProperties: false,
       },
     },

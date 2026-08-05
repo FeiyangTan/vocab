@@ -30,15 +30,25 @@ const createdAt = () =>
  * 如果 process 直接落库，Claude 切错词的卡会立刻混进复习。
  */
 export type Draft = {
-  /** 目标词在原句里的实际形态 */
+  /** 目标词在句子里的实际形态 */
   target: string;
   /** 词形还原 */
   lemma: string;
   /** 中文释义 */
   definition: string;
   domain: 'work' | 'daily';
-  /** 原句挖掉目标词，用 ___ 占位 */
+  /** cloze 挖空前的完整句子 */
+  sentence: string;
+  /** sentence 挖掉目标词，用 ___ 占位 */
   cloze: string;
+  /**
+   * true = 这句是 Claude 造的，不是 jimmy 真遇到的语境。
+   *
+   * 存进去的是孤立单词时没语境可挖，只能造一句。但造句**不等价于**真实语境 ——
+   * 文档的核心设计说得很清楚，价值来自「我遇到它的那一次」。所以这个标记要一路
+   * 传到审核页显示出来，让人分得清哪些卡有真语境。
+   */
+  generated: boolean;
 };
 
 /** 捕获落点。捕获阶段只写 raw_text 和 source，不做任何加工 —— 3 秒结束。 */

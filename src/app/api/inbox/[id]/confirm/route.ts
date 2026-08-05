@@ -16,10 +16,11 @@ function parseDraft(body: unknown): Draft | null {
   const target = str(b.target);
   const lemma = str(b.lemma);
   const definition = str(b.definition);
+  const sentence = str(b.sentence);
   const cloze = str(b.cloze);
   const domain = b.domain === 'work' || b.domain === 'daily' ? b.domain : null;
-  if (!target || !lemma || !definition || !cloze || !domain) return null;
-  return { target, lemma, definition, domain, cloze };
+  if (!target || !lemma || !definition || !sentence || !cloze || !domain) return null;
+  return { target, lemma, definition, domain, sentence, cloze, generated: b.generated === true };
 }
 
 export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -60,12 +61,16 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
             .returning({ id: words.id })
         )[0].id;
 
+      // encounter 存的是**句子**，不是 inbox 里的原始输入：
+      // - 造句的条目，原始输入只是个孤立单词，存进来复习时底部什么也看不到
+      // - 网页分享的条目，原始输入夹着标题和 URL，存进来是噪音
+      // 原始输入不会丢 —— inbox.raw_text 永久保留。
       const [encounter] = await tx
         .insert(encounters)
         .values({
           wordId,
-          rawText: row.rawText,
-          source: row.source,
+          rawText: draft.sentence,
+          source: draft.generated ? `${row.source}+ai` : row.source,
           note: draft.definition,
         })
         .returning({ id: encounters.id });
