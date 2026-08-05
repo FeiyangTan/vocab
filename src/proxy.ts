@@ -13,7 +13,15 @@ import { COOKIE_NAME, isValidSession } from '@/lib/auth';
  * ⚠️ **精确匹配，不是前缀匹配。** 用前缀的话 `/api/inbox` 会连带放行
  * `/api/inbox/process` 和 `/api/inbox/{id}/confirm` —— 那两个是要登录的。
  */
-const PUBLIC_PATHS = new Set(['/login', '/api/login', '/api/inbox']);
+const PUBLIC_PATHS = new Set([
+  '/login',
+  '/api/login',
+  '/api/inbox',
+  // PWA 图标：路由形式没有文件后缀，落不进下面 matcher 的图片排除规则，
+  // 不放行的话 iOS「添加到主屏」抓图标会被重定向到登录页
+  '/icon',
+  '/apple-icon',
+]);
 
 function isPublic(pathname: string): boolean {
   return PUBLIC_PATHS.has(pathname);
