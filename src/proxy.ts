@@ -21,6 +21,8 @@ const PUBLIC_PATHS = new Set([
   // 不放行的话 iOS「添加到主屏」抓图标会被重定向到登录页
   '/icon',
   '/apple-icon',
+  // Vercel Cron 带不了登录 cookie，这条路由自己校验 Bearer $CRON_SECRET
+  '/api/cron/backup',
 ]);
 
 function isPublic(pathname: string): boolean {
