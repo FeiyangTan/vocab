@@ -1,9 +1,10 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ContrastEditor } from '@/components/contrast-editor';
 import type { Draft } from '@/db/schema';
+import { PROCESS_BATCH_SIZE } from '@/lib/batch';
 
 type Item = {
   id: number;
@@ -22,12 +23,27 @@ export function ReviewList({ items, unprocessed }: { items: Item[]; unprocessed:
   const [index, setIndex] = useState(0);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  /** 处理前的 id 集合，用来在刷新后找出「第一条新卡」并跳过去 */
+  const idsBeforeProcess = useRef<Set<number> | null>(null);
 
   const current = items[index];
 
+  // 处理完 router.refresh() 后 items 会变长；把视图跳到第一条新处理出来的卡，
+  // 否则屏幕还停在原来那张，看起来像什么都没发生
+  useEffect(() => {
+    const before = idsBeforeProcess.current;
+    if (!before || items.length <= before.size) return;
+    const firstNew = items.findIndex((i) => !before.has(i.id));
+    if (firstNew >= 0) setIndex(firstNew);
+    idsBeforeProcess.current = null;
+  }, [items]);
+
   async function handleProcess() {
+    idsBeforeProcess.current = new Set(items.map((i) => i.id));
     setProcessing(true);
     setError('');
+    setNotice('');
     const response = await fetch('/api/inbox/process', { method: 'POST' });
     const data = (await response.json().catch(() => ({}))) as {
       processed?: number;
@@ -35,9 +51,19 @@ export function ReviewList({ items, unprocessed }: { items: Item[]; unprocessed:
     };
     setProcessing(false);
     if (!response.ok) {
+      idsBeforeProcess.current = null;
       setError(data.error ?? '处理失败');
       return;
     }
+    const done = data.processed ?? 0;
+    const left = Math.max(0, unprocessed - done);
+    setNotice(
+      done === 0
+        ? '这一批没有产出草稿，再点一次试试'
+        : left > 0
+          ? `已处理 ${done} 条，还剩 ${left} 条待整理`
+          : `已处理 ${done} 条，全部整理完了`,
+    );
     router.refresh();
   }
 
@@ -52,13 +78,19 @@ export function ReviewList({ items, unprocessed }: { items: Item[]; unprocessed:
         <button
           onClick={handleProcess}
           disabled={processing}
-          className="mb-6 w-full rounded-lg border border-black/15 px-3 py-2 text-sm disabled:opacity-40 dark:border-white/20"
+          className="mb-2 w-full rounded-lg border border-black/15 px-3 py-2 text-sm disabled:opacity-40 dark:border-white/20"
         >
-          {processing ? '正在调用 Claude…' : `处理 ${unprocessed} 条待整理`}
+          {processing
+            ? '正在调用 Claude…'
+            : unprocessed > PROCESS_BATCH_SIZE
+              ? `处理 ${PROCESS_BATCH_SIZE} 条（共 ${unprocessed} 条待整理）`
+              : `处理 ${unprocessed} 条待整理`}
         </button>
       )}
 
+      {notice && <p className="mb-4 text-sm opacity-60">{notice}</p>}
       {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
+      {unprocessed === 0 && !notice && <div className="mb-4" />}
 
       {!current ? (
         <p className="py-16 text-center text-sm opacity-60">

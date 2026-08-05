@@ -2,6 +2,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { getDb } from '@/db';
 import { inbox } from '@/db/schema';
+import { PROCESS_BATCH_SIZE } from '@/lib/batch';
 import { draftFromInbox } from '@/lib/claude';
 
 /**
@@ -9,8 +10,6 @@ import { draftFromInbox } from '@/lib/claude';
  *
  * **不改 status** —— 还是 pending，等审核页确认。写库是确认时才发生的事。
  */
-
-const BATCH_SIZE = 10;
 
 export async function POST() {
   const db = getDb();
@@ -20,7 +19,7 @@ export async function POST() {
     .from(inbox)
     .where(and(eq(inbox.status, 'pending'), isNull(inbox.draft)))
     .orderBy(inbox.id)
-    .limit(BATCH_SIZE);
+    .limit(PROCESS_BATCH_SIZE);
 
   if (rows.length === 0) return NextResponse.json({ processed: 0 });
 
