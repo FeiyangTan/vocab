@@ -1,8 +1,12 @@
 'use client';
 
+import { Volume2 } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { ContrastRow } from '@/components/contrast-row';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
 import { speak } from '@/lib/speak';
 import { GRADES } from '@/lib/sm2';
 
@@ -88,26 +92,22 @@ export function ReviewSession({ domain }: { domain: 'work' | 'daily' }) {
   });
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-xl flex-col p-4">
-      <header className="mb-6 flex items-baseline justify-between">
-        <Link href="/review" className="text-sm opacity-60 hover:opacity-100">
-          ← 复习
-        </Link>
-        <span className="text-sm opacity-60">
-          {domain} · 剩 {remaining}
-        </span>
-      </header>
+    <main className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col p-4 md:p-8">
+      <div className="mb-6 flex items-baseline justify-between">
+        <h1 className="text-xl font-medium tracking-tight">{domain}</h1>
+        <span className="text-sm text-muted-foreground">剩 {remaining} 张</span>
+      </div>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
 
       {loading && !card ? (
-        <p className="py-24 text-center text-sm opacity-40">…</p>
+        <p className="py-24 text-center text-sm text-muted-foreground">…</p>
       ) : !card ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-4">
-          <p className="text-sm opacity-60">这个队列复习完了</p>
-          <Link href="/review" className="text-sm underline opacity-70">
-            回队列列表
-          </Link>
+          <p className="text-sm text-muted-foreground">这个队列复习完了</p>
+          <Button asChild variant="outline">
+            <Link href="/review">回队列列表</Link>
+          </Button>
         </div>
       ) : (
         <>
@@ -116,54 +116,51 @@ export function ReviewSession({ domain }: { domain: 'work' | 'daily' }) {
             <p className="text-center text-xl leading-relaxed">{card.clozeText}</p>
 
             {flipped ? (
-              <div className="space-y-4 rounded-xl border border-black/10 p-4 dark:border-white/15">
-                <div className="flex items-center justify-center gap-3">
+              <Card className="gap-4 p-5">
+                <div className="flex items-center justify-center gap-2">
                   <span className="text-2xl font-medium">{card.lemma}</span>
-                  <button
-                    onClick={() => speak(card.lemma)}
+                  <Button
+                    variant="ghost"
+                    size="icon"
                     aria-label="发音"
-                    className="rounded-full border border-black/15 px-2.5 py-1 text-sm dark:border-white/20"
+                    onClick={() => speak(card.lemma)}
                   >
-                    🔊
-                  </button>
+                    <Volume2 className="size-4" />
+                  </Button>
                 </div>
 
                 {card.note && <p className="text-center text-base">{card.note}</p>}
 
-                <div className="border-t border-black/10 pt-3 dark:border-white/15">
-                  <ContrastRow
-                    wordId={card.wordId}
-                    contrasts={card.contrasts}
-                    onChange={(next) => setCard({ ...card, contrasts: next })}
-                  />
-                </div>
+                <Separator />
+                <ContrastRow
+                  wordId={card.wordId}
+                  contrasts={card.contrasts}
+                  onChange={(next) => setCard({ ...card, contrasts: next })}
+                />
 
-                <p className="border-t border-black/10 pt-3 text-center text-sm opacity-50 dark:border-white/15">
-                  {card.rawText}
-                </p>
-              </div>
+                <Separator />
+                <p className="text-center text-sm text-muted-foreground">{card.rawText}</p>
+              </Card>
             ) : (
-              <button
-                onClick={() => setFlipped(true)}
-                className="mx-auto rounded-lg border border-black/15 px-6 py-2 text-sm dark:border-white/20"
-              >
-                翻面 <span className="ml-1 opacity-40">空格</span>
-              </button>
+              <Button variant="outline" className="mx-auto" onClick={() => setFlipped(true)}>
+                翻面 <span className="ml-1 text-xs opacity-50">空格</span>
+              </Button>
             )}
           </div>
 
           {flipped && (
-            <div className="grid grid-cols-4 gap-2 pb-6 pt-8">
+            <div className="grid grid-cols-4 gap-2 pt-8">
               {GRADES.map((g, i) => (
-                <button
+                <Button
                   key={g.grade}
-                  onClick={() => grade(g.grade)}
+                  variant="outline"
                   title={g.hint}
-                  className="rounded-lg border border-black/15 py-3 text-sm dark:border-white/20"
+                  onClick={() => grade(g.grade)}
+                  className="h-auto flex-col gap-0.5 py-3"
                 >
-                  <div>{g.label}</div>
-                  <div className="mt-0.5 text-xs opacity-40">{i + 1}</div>
-                </button>
+                  <span>{g.label}</span>
+                  <span className="text-xs text-muted-foreground">{i + 1}</span>
+                </Button>
               ))}
             </div>
           )}

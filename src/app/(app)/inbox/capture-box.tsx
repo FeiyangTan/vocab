@@ -2,6 +2,9 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Textarea } from '@/components/ui/textarea';
 
 /**
  * 网页端手动添加。
@@ -48,7 +51,7 @@ export function CaptureBox() {
 
   return (
     <div className="mb-6">
-      <textarea
+      <Textarea
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
@@ -60,41 +63,32 @@ export function CaptureBox() {
         }}
         rows={3}
         placeholder="粘贴英文句子，或一行一个单词…"
-        className="w-full resize-y rounded-lg border border-black/15 px-3 py-2 text-sm outline-none focus:border-black/40 dark:border-white/20 dark:focus:border-white/50"
+        className="resize-y"
       />
 
       <div className="mt-2 flex items-center justify-between gap-3">
-        <label className="flex cursor-pointer items-center gap-2 text-xs opacity-70">
-          <input
-            type="checkbox"
-            checked={asOne}
-            onChange={(e) => setAsOne(e.target.checked)}
-            className="accent-current"
-          />
+        <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+          <Checkbox checked={asOne} onCheckedChange={(v) => setAsOne(v === true)} />
           整段当一条
         </label>
 
         <div className="flex items-center gap-3">
-          <span className="text-xs opacity-40">
+          <span className="text-xs text-muted-foreground">
             {willSave > 0 ? `将存入 ${willSave} 条 · ⌘↩` : '⌘↩ 存入'}
           </span>
-          <button
-            onClick={submit}
-            disabled={pending || willSave === 0}
-            className="rounded-lg bg-foreground px-4 py-1.5 text-sm text-background disabled:opacity-30"
-          >
+          <Button size="sm" onClick={submit} disabled={pending || willSave === 0}>
             {pending ? '…' : '存入'}
-          </button>
+          </Button>
         </div>
       </div>
 
       {!asOne && lines.length > 1 && (
-        <p className="mt-1.5 text-xs opacity-40">
+        <p className="mt-1.5 text-xs text-muted-foreground">
           从 PDF 或电子书复制的句子常带排版折行 —— 那种情况勾上「整段当一条」
         </p>
       )}
 
-      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+      {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
     </div>
   );
 }

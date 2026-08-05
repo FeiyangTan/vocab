@@ -1,5 +1,4 @@
 import { asc, eq, sql } from 'drizzle-orm';
-import Link from 'next/link';
 import { getDb } from '@/db';
 import { encounters, words } from '@/db/schema';
 import { WordRow } from './word-row';
@@ -21,18 +20,16 @@ export default async function WordsPage() {
     .orderBy(asc(words.lemma));
 
   return (
-    <main className="mx-auto w-full max-w-xl p-4 pb-24">
-      <header className="mb-6 flex items-baseline justify-between">
-        <Link href="/" className="text-sm opacity-60 hover:opacity-100">
-          ← vocab
-        </Link>
-        <span className="text-sm opacity-60">词汇 {rows.length}</span>
-      </header>
+    <main className="mx-auto w-full max-w-2xl p-4 md:p-8">
+      <div className="mb-6 flex items-baseline justify-between">
+        <h1 className="text-xl font-medium tracking-tight">词汇</h1>
+        <span className="text-sm text-muted-foreground">{rows.length} 个</span>
+      </div>
 
       {rows.length === 0 ? (
-        <p className="py-16 text-center text-sm opacity-60">还没有确认过的词</p>
+        <p className="py-16 text-center text-sm text-muted-foreground">还没有确认过的词</p>
       ) : (
-        <ul className="divide-y divide-black/10 dark:divide-white/10">
+        <ul className="divide-y">
           {rows.map((w) => (
             <WordRow key={w.id} word={w} />
           ))}

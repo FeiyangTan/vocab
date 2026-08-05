@@ -3,6 +3,11 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { ContrastEditor } from '@/components/contrast-editor';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Separator } from '@/components/ui/separator';
+import { Textarea } from '@/components/ui/textarea';
 import type { Draft } from '@/db/schema';
 import { PROCESS_BATCH_SIZE } from '@/lib/batch';
 
@@ -75,30 +80,31 @@ export function ReviewList({ items, unprocessed }: { items: Item[]; unprocessed:
   return (
     <>
       {unprocessed > 0 && (
-        <button
+        <Button
+          variant="outline"
           onClick={handleProcess}
           disabled={processing}
-          className="mb-2 w-full rounded-lg border border-black/15 px-3 py-2 text-sm disabled:opacity-40 dark:border-white/20"
+          className="mb-2 w-full"
         >
           {processing
             ? '正在调用 Claude…'
             : unprocessed > PROCESS_BATCH_SIZE
               ? `处理 ${PROCESS_BATCH_SIZE} 条（共 ${unprocessed} 条待整理）`
               : `处理 ${unprocessed} 条待整理`}
-        </button>
+        </Button>
       )}
 
-      {notice && <p className="mb-4 text-sm opacity-60">{notice}</p>}
-      {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
+      {notice && <p className="mb-4 text-sm text-muted-foreground">{notice}</p>}
+      {error && <p className="mb-4 text-sm text-destructive">{error}</p>}
       {unprocessed === 0 && !notice && <div className="mb-4" />}
 
       {!current ? (
-        <p className="py-16 text-center text-sm opacity-60">
+        <p className="py-16 text-center text-sm text-muted-foreground">
           {unprocessed > 0 ? '点上面的按钮开始整理' : '收集箱是空的'}
         </p>
       ) : (
         <>
-          <p className="mb-3 text-xs opacity-50">
+          <p className="mb-3 text-xs text-muted-foreground">
             第 {index + 1} / {items.length} 条
           </p>
           <ReviewCard key={current.id} item={current} onDone={handleDone} />
@@ -153,93 +159,84 @@ function ReviewCard({ item, onDone }: { item: Item; onDone: () => void }) {
   }
 
   return (
-    <div className="space-y-5 rounded-xl border border-black/10 p-4 dark:border-white/15">
+    <Card className="gap-5 p-5">
       <div>
-        <div className="mb-1 text-xs opacity-50">
+        <div className="mb-1 text-xs text-muted-foreground">
           原文 · {item.source} · {new Date(item.createdAt).toLocaleDateString()}
         </div>
         <p className="whitespace-pre-wrap text-sm leading-relaxed">{item.rawText}</p>
       </div>
 
-      <div className="space-y-3 border-t border-black/10 pt-4 dark:border-white/15">
+      <Separator />
+
+      <div className="space-y-3">
         <Field label="目标词" value={target} onChange={setTarget} />
         <Field label="词形还原" value={lemma} onChange={setLemma} />
         <Field label="释义" value={definition} onChange={setDefinition} />
 
         <div>
-          <div className="mb-1 text-xs opacity-50">归类</div>
+          <div className="mb-1 text-xs text-muted-foreground">归类</div>
           <div className="flex gap-2">
             {(['work', 'daily'] as const).map((v) => (
-              <button
+              <Button
                 key={v}
+                size="sm"
+                variant={domain === v ? 'default' : 'outline'}
                 onClick={() => setDomain(v)}
-                className={`rounded-lg px-3 py-1.5 text-sm ${
-                  domain === v
-                    ? 'bg-foreground text-background'
-                    : 'border border-black/15 dark:border-white/20'
-                }`}
               >
                 {v}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
 
         <div>
-          <div className="mb-1 text-xs opacity-50">
+          <div className="mb-1 text-xs text-muted-foreground">
             例句
             {d.generated && (
               <span className="ml-2 text-amber-600">⚠ AI 造的，不是你真实遇到的语境</span>
             )}
           </div>
-          <textarea
+          <Textarea
             value={sentence}
             onChange={(e) => setSentence(e.target.value)}
             rows={2}
-            className="w-full rounded-lg border border-black/15 px-3 py-2 text-sm dark:border-white/20"
-          />
+            />
         </div>
 
         <div>
-          <div className="mb-1 text-xs opacity-50">
+          <div className="mb-1 text-xs text-muted-foreground">
             挖空（复习时的正面）
             {noContext && <span className="ml-2 text-amber-600">⚠ 没挖空</span>}
           </div>
-          <textarea
+          <Textarea
             value={cloze}
             onChange={(e) => setCloze(e.target.value)}
             rows={2}
-            className="w-full rounded-lg border border-black/15 px-3 py-2 text-sm dark:border-white/20"
-          />
+            />
         </div>
 
         <div>
-          <div className="mb-1 text-xs opacity-50">
+          <div className="mb-1 text-xs text-muted-foreground">
             对比词（复习时在背面显示，AI 不填）
           </div>
           <ContrastEditor value={contrasts} onChange={setContrasts} compact />
         </div>
       </div>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
 
-      <div className="flex gap-2 border-t border-black/10 pt-4 dark:border-white/15">
-        <button
-          onClick={() => send('discard')}
-          disabled={pending !== null}
-          className="rounded-lg border border-black/15 px-4 py-2 text-sm disabled:opacity-40 dark:border-white/20"
-        >
+      <Separator />
+
+      <div className="flex gap-2">
+        <Button variant="outline" onClick={() => send('discard')} disabled={pending !== null}>
           {pending === 'discard' ? '…' : '丢弃'}
-        </button>
-        <button
-          onClick={() => send('confirm')}
-          disabled={pending !== null}
-          className="flex-1 rounded-lg bg-foreground px-4 py-2 text-sm text-background disabled:opacity-40"
-        >
+        </Button>
+        <Button className="flex-1" onClick={() => send('confirm')} disabled={pending !== null}>
           {pending === 'confirm' ? '…' : '确认'}
-        </button>
+        </Button>
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -254,12 +251,8 @@ function Field({
 }) {
   return (
     <div>
-      <div className="mb-1 text-xs opacity-50">{label}</div>
-      <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg border border-black/15 px-3 py-2 text-sm dark:border-white/20"
-      />
+      <div className="mb-1 text-xs text-muted-foreground">{label}</div>
+      <Input value={value} onChange={(e) => onChange(e.target.value)} />
     </div>
   );
 }

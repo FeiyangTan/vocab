@@ -1,7 +1,9 @@
 'use client';
 
+import { Volume2 } from 'lucide-react';
 import { useState } from 'react';
 import { ContrastRow } from '@/components/contrast-row';
+import { Button } from '@/components/ui/button';
 import { speak } from '@/lib/speak';
 
 type Word = {
@@ -19,14 +21,16 @@ export function WordRow({ word }: { word: Word }) {
     <li className="py-3">
       <div className="mb-1.5 flex items-baseline gap-2">
         <span className="font-medium">{word.lemma}</span>
-        <button
-          onClick={() => speak(word.lemma)}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-6"
           aria-label="发音"
-          className="text-sm opacity-50 hover:opacity-100"
+          onClick={() => speak(word.lemma)}
         >
-          🔊
-        </button>
-        <span className="ml-auto text-xs opacity-40">
+          <Volume2 className="size-3.5" />
+        </Button>
+        <span className="ml-auto text-xs text-muted-foreground">
           {word.domain} · {word.encounterCount} 次
         </span>
       </div>

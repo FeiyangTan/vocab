@@ -1,6 +1,9 @@
 'use client';
 
+import { Plus, Volume2, X } from 'lucide-react';
 import { useState } from 'react';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { MAX_CONTRASTS } from '@/lib/contrasts';
 import { speak } from '@/lib/speak';
 
@@ -37,36 +40,35 @@ export function ContrastEditor({
 
   return (
     <div className="flex flex-wrap items-center gap-2 text-sm">
-      {!compact && value.length > 0 && <span className="text-xs opacity-50">别搞混</span>}
+      {!compact && value.length > 0 && (
+        <span className="text-xs text-muted-foreground">别搞混</span>
+      )}
 
       {value.map((word) => (
-        <span
-          key={word}
-          className="inline-flex items-center gap-1 rounded-full border border-black/15 py-0.5 pl-2.5 pr-1 dark:border-white/20"
-        >
+        <Badge key={word} variant="outline" className="gap-1 py-1 pl-2.5 pr-1 font-normal">
           {word}
           <button
             type="button"
             onClick={() => speak(word)}
             aria-label={`朗读 ${word}`}
-            className="px-1 opacity-60 hover:opacity-100"
+            className="px-0.5 text-muted-foreground hover:text-foreground"
           >
-            🔊
+            <Volume2 className="size-3.5" />
           </button>
           <button
             type="button"
             onClick={() => onChange(value.filter((w) => w !== word))}
             aria-label={`删除 ${word}`}
             disabled={busy}
-            className="px-1 text-xs opacity-30 hover:opacity-80"
+            className="px-0.5 text-muted-foreground/60 hover:text-foreground"
           >
-            ✕
+            <X className="size-3" />
           </button>
-        </span>
+        </Badge>
       ))}
 
       {adding ? (
-        <input
+        <Input
           autoFocus
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
@@ -82,16 +84,17 @@ export function ContrastEditor({
             }
           }}
           placeholder="相近的词"
-          className="w-28 rounded-full border border-black/15 px-2.5 py-0.5 text-sm outline-none focus:border-black/40 dark:border-white/20 dark:focus:border-white/50"
+          className="h-7 w-32 rounded-full px-3 text-sm"
         />
       ) : (
         <button
           type="button"
           onClick={() => setAdding(true)}
           disabled={busy || value.length >= MAX_CONTRASTS}
-          className="rounded-full border border-dashed border-black/20 px-2.5 py-0.5 text-xs opacity-50 hover:opacity-100 disabled:opacity-20 dark:border-white/25"
+          className="inline-flex items-center gap-1 rounded-full border border-dashed px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30"
         >
-          {value.length > 0 ? '+' : '+ 对比词'}
+          <Plus className="size-3" />
+          {value.length === 0 && '对比词'}
         </button>
       )}
     </div>

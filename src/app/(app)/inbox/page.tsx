@@ -1,5 +1,4 @@
 import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
-import Link from 'next/link';
 import { getDb } from '@/db';
 import { inbox } from '@/db/schema';
 import { CaptureBox } from './capture-box';
@@ -28,13 +27,8 @@ export default async function InboxPage() {
     .where(and(eq(inbox.status, 'pending'), isNull(inbox.draft)));
 
   return (
-    <main className="mx-auto w-full max-w-xl p-4 pb-24">
-      <header className="mb-6 flex items-baseline justify-between">
-        <Link href="/" className="text-sm opacity-60 hover:opacity-100">
-          ← vocab
-        </Link>
-        <span className="text-sm opacity-60">收集箱</span>
-      </header>
+    <main className="mx-auto w-full max-w-2xl p-4 md:p-8">
+      <h1 className="mb-6 text-xl font-medium tracking-tight">收集箱</h1>
 
       <CaptureBox />
 
