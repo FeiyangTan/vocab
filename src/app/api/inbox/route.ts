@@ -49,9 +49,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'body 必须是 JSON' }, { status: 400 });
   }
 
+  // 拆行：逐行 trim、丢掉空行。
+  // 不拆：只去首尾空白 —— 中间的换行要留着，那正是「整段当一条」的意义
+  //（PDF 复制的折行、iOS 分享的「文案 + 换行 + URL」都靠它保持完整）。
   const texts = split
     ? rawText.split('\n').map((l) => l.trim()).filter((l) => l.length > 0)
-    : [rawText];
+    : [rawText.trim()];
 
   if (texts.length === 0) {
     return NextResponse.json({ error: 'raw_text 不能为空' }, { status: 400 });
