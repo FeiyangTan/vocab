@@ -7,11 +7,16 @@ import { COOKIE_NAME, isValidSession } from '@/lib/auth';
  * 默认跑 Node.js runtime，且不能设 runtime 配置。
  */
 
-/** 不需要登录态的路径。/api/inbox 走 token 校验（在路由里做），不走 cookie。 */
-const PUBLIC_PATHS = ['/login', '/api/login', '/api/inbox'];
+/**
+ * 不需要登录态的路径。/api/inbox 走 token 校验（在路由里做），不走 cookie。
+ *
+ * ⚠️ **精确匹配，不是前缀匹配。** 用前缀的话 `/api/inbox` 会连带放行
+ * `/api/inbox/process` 和 `/api/inbox/{id}/confirm` —— 那两个是要登录的。
+ */
+const PUBLIC_PATHS = new Set(['/login', '/api/login', '/api/inbox']);
 
 function isPublic(pathname: string): boolean {
-  return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+  return PUBLIC_PATHS.has(pathname);
 }
 
 export async function proxy(request: NextRequest) {

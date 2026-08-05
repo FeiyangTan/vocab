@@ -3,6 +3,7 @@ import {
   bigserial,
   index,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   real,
@@ -22,6 +23,24 @@ export const wordDomain = pgEnum('word_domain', ['work', 'daily']);
 const createdAt = () =>
   timestamp('created_at', { withTimezone: true }).notNull().defaultNow();
 
+/**
+ * Claude 预处理的产出。**只是草稿** —— 人确认之前不写 words/encounters/cards。
+ *
+ * 为什么不直接写库：cards 和 inbox 之间没有外键，复习队列查询排除不掉「还没审核的卡」。
+ * 如果 process 直接落库，Claude 切错词的卡会立刻混进复习。
+ */
+export type Draft = {
+  /** 目标词在原句里的实际形态 */
+  target: string;
+  /** 词形还原 */
+  lemma: string;
+  /** 中文释义 */
+  definition: string;
+  domain: 'work' | 'daily';
+  /** 原句挖掉目标词，用 ___ 占位 */
+  cloze: string;
+};
+
 /** 捕获落点。捕获阶段只写 raw_text 和 source，不做任何加工 —— 3 秒结束。 */
 export const inbox = pgTable(
   'inbox',
@@ -30,6 +49,8 @@ export const inbox = pgTable(
     rawText: text('raw_text').notNull(),
     source: text('source').notNull(),
     status: inboxStatus('status').notNull().default('pending'),
+    /** null = 还没被 Claude 处理过 */
+    draft: jsonb('draft').$type<Draft>(),
     createdAt: createdAt(),
   },
   (t) => [index('inbox_status_created_at_idx').on(t.status, t.createdAt)],

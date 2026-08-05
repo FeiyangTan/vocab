@@ -8,6 +8,13 @@
       "when": 1785890878588,
       "tag": "0000_happy_green_goblin",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1785903665939,
+      "tag": "0001_true_deathstrike",
+      "breakpoints": true
     }
   ]
 }
