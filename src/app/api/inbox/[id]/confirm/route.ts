@@ -2,6 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { getDb } from '@/db';
 import { cards, encounters, inbox, words, type Draft } from '@/db/schema';
+import { cleanContrasts, MAX_CONTRASTS } from '@/lib/contrasts';
 
 /**
  * 审核确认：把（可能被人改过的）草稿真正写成 word + encounter + card。
@@ -29,10 +30,13 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     return NextResponse.json({ error: 'bad id' }, { status: 400 });
   }
 
-  const draft = parseDraft(await request.json().catch(() => null));
+  const body = await request.json().catch(() => null);
+  const draft = parseDraft(body);
   if (!draft) {
     return NextResponse.json({ error: '字段不完整' }, { status: 400 });
   }
+  // 对比词是 word 的属性，不在 Draft 里；没传就是空数组
+  const contrasts = cleanContrasts((body as { contrasts?: unknown })?.contrasts) ?? [];
 
   const db = getDb();
 
@@ -47,19 +51,29 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
 
       // 同一个 lemma 在同一个 domain 下复用同一条 word；不同 domain 算两个词
       const [existing] = await tx
-        .select({ id: words.id })
+        .select({ id: words.id, contrasts: words.contrasts })
         .from(words)
         .where(and(eq(words.lemma, draft.lemma), eq(words.domain, draft.domain)))
         .limit(1);
 
-      const wordId =
-        existing?.id ??
-        (
-          await tx
-            .insert(words)
-            .values({ lemma: draft.lemma, domain: draft.domain })
-            .returning({ id: words.id })
-        )[0].id;
+      let wordId: number;
+      if (existing) {
+        wordId = existing.id;
+        // **合并而不是覆盖** —— 第二次遇到同一个词时确认，不该把上次加的对比词抹掉
+        const merged = [...new Set([...existing.contrasts, ...contrasts])].slice(
+          0,
+          MAX_CONTRASTS,
+        );
+        if (merged.length !== existing.contrasts.length) {
+          await tx.update(words).set({ contrasts: merged }).where(eq(words.id, wordId));
+        }
+      } else {
+        const [created] = await tx
+          .insert(words)
+          .values({ lemma: draft.lemma, domain: draft.domain, contrasts })
+          .returning({ id: words.id });
+        wordId = created.id;
+      }
 
       // encounter 存的是**句子**，不是 inbox 里的原始输入：
       // - 造句的条目，原始输入只是个孤立单词，存进来复习时底部什么也看不到

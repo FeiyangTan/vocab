@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { getDb } from '@/db';
 import { words } from '@/db/schema';
+import { cleanContrasts } from '@/lib/contrasts';
 
 /**
  * 设置一个词的对比词。`PUT /api/words/{id}/contrasts` body `{ contrasts: string[] }`
@@ -10,21 +11,6 @@ import { words } from '@/db/schema';
  * 前端拿当前数组改完整个传回来即可，不用维护两套逻辑。
  */
 
-/** 手滑粘一大段进来的防线，不是产品功能 */
-const MAX = 8;
-
-function clean(value: unknown): string[] | null {
-  if (!Array.isArray(value)) return null;
-  const seen = new Set<string>();
-  for (const item of value) {
-    if (typeof item !== 'string') continue;
-    const word = item.trim();
-    if (word && !seen.has(word)) seen.add(word);
-    if (seen.size >= MAX) break;
-  }
-  return [...seen];
-}
-
 export async function PUT(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const id = Number((await ctx.params).id);
   if (!Number.isInteger(id)) {
@@ -32,7 +18,7 @@ export async function PUT(request: Request, ctx: { params: Promise<{ id: string 
   }
 
   const body = (await request.json().catch(() => null)) as { contrasts?: unknown } | null;
-  const contrasts = clean(body?.contrasts);
+  const contrasts = cleanContrasts(body?.contrasts);
   if (!contrasts) {
     return NextResponse.json({ error: 'contrasts 必须是字符串数组' }, { status: 400 });
   }

@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { ContrastEditor } from '@/components/contrast-editor';
 import type { Draft } from '@/db/schema';
 
 type Item = {
@@ -83,6 +84,8 @@ function ReviewCard({ item, onDone }: { item: Item; onDone: () => void }) {
   const [domain, setDomain] = useState<'work' | 'daily'>(d.domain);
   const [sentence, setSentence] = useState(d.sentence ?? item.rawText);
   const [cloze, setCloze] = useState(d.cloze);
+  // 词这时还不存在（确认的事务里才创建），所以只能攒在本地，随确认一起提交
+  const [contrasts, setContrasts] = useState<string[]>([]);
   const [pending, setPending] = useState<'confirm' | 'discard' | null>(null);
   const [error, setError] = useState('');
 
@@ -104,6 +107,7 @@ function ReviewCard({ item, onDone }: { item: Item; onDone: () => void }) {
               sentence,
               cloze,
               generated: d.generated ?? false,
+              contrasts,
             })
           : '{}',
     });
@@ -175,6 +179,13 @@ function ReviewCard({ item, onDone }: { item: Item; onDone: () => void }) {
             rows={2}
             className="w-full rounded-lg border border-black/15 px-3 py-2 text-sm dark:border-white/20"
           />
+        </div>
+
+        <div>
+          <div className="mb-1 text-xs opacity-50">
+            对比词（复习时在背面显示，AI 不填）
+          </div>
+          <ContrastEditor value={contrasts} onChange={setContrasts} compact />
         </div>
       </div>
 
