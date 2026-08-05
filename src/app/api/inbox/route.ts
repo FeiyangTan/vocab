@@ -1,21 +1,28 @@
+import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { getDb } from '@/db';
 import { inbox } from '@/db/schema';
-import { isValidInboxToken } from '@/lib/auth';
+import { COOKIE_NAME, isValidInboxToken, isValidSession } from '@/lib/auth';
 
 /**
- * 捕获落点。
+ * 捕获落点。**两种身份都收**：
  *
- * token 放 query 而非 header —— iOS 快捷指令加 header 麻烦。
- * 这条路由在 proxy.ts 的 PUBLIC_PATHS 里，走 token 不走 cookie。
+ * - `?t=<token>` —— 给 iOS 快捷指令用。token 放 query 而非 header，因为快捷指令加 header 麻烦。
+ * - 登录 cookie —— 给网页端手动添加用，这样前端不必把 token 塞进 JS。
+ *
+ * 这条路由在 proxy.ts 的 PUBLIC_PATHS 里（proxy 不拦），所以两种校验都得在这里自己做。
  *
  * 只做一次 INSERT，原文照存：不做词形还原、不去重、不判断 domain、不挖空。
- * 那些都是 Phase 4 的事 —— 捕获阶段任何加工都是在给 3 秒预算加负担。
+ * 那些都是整理阶段的事 —— 捕获阶段任何加工都是在给 3 秒预算加负担。
  */
 
 export async function POST(request: Request) {
   const token = new URL(request.url).searchParams.get('t');
-  if (!isValidInboxToken(token)) {
+  const authorized =
+    isValidInboxToken(token) ||
+    (await isValidSession((await cookies()).get(COOKIE_NAME)?.value));
+
+  if (!authorized) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 

@@ -2,6 +2,7 @@ import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import Link from 'next/link';
 import { getDb } from '@/db';
 import { inbox } from '@/db/schema';
+import { CaptureBox } from './capture-box';
 import { ReviewList } from './review-list';
 
 export const dynamic = 'force-dynamic';
@@ -34,6 +35,8 @@ export default async function InboxPage() {
         </Link>
         <span className="text-sm opacity-60">收集箱</span>
       </header>
+
+      <CaptureBox />
 
       <ReviewList
         items={ready.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() }))}
