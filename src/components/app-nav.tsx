@@ -1,16 +1,17 @@
 'use client';
 
-import { BookText, Inbox, Layers } from 'lucide-react';
+import { BookText, Inbox, Layers, Tags } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 
-export type NavCounts = { due: number; pending: number; words: number };
+export type NavCounts = { due: number; pending: number; words: number; categories: number };
 
 const ITEMS = [
   { href: '/review', label: '复习', icon: Layers, key: 'due' },
   { href: '/inbox', label: '收集箱', icon: Inbox, key: 'pending' },
   { href: '/words', label: '词汇', icon: BookText, key: 'words' },
+  { href: '/categories', label: '分类', icon: Tags, key: 'categories' },
 ] as const;
 
 function useActive() {
@@ -31,9 +32,9 @@ export function Sidebar({ counts }: { counts: NavCounts }) {
   const isActive = useActive();
 
   return (
-    <aside className="hidden w-52 shrink-0 flex-col border-r bg-sidebar md:flex">
-      <div className="px-5 py-5 text-base font-medium tracking-tight">vocab</div>
-      <nav className="flex flex-col gap-0.5 px-2">
+    <aside className="hidden w-52 shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex">
+      <div className="px-5 py-6 font-serif text-xl font-medium tracking-tight">vocab</div>
+      <nav className="flex flex-col px-2">
         {ITEMS.map(({ href, label, icon: Icon, key }) => {
           const active = isActive(href);
           const n = counts[key];
@@ -41,11 +42,12 @@ export function Sidebar({ counts }: { counts: NavCounts }) {
             <Link
               key={href}
               href={href}
+              /* 选中态用左侧墨绿竖条 + 墨绿文字，不用灰底色块 —— 色块是后台的做法 */
               className={cn(
-                'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors',
+                'flex items-center gap-2.5 border-l-2 px-3 py-2 text-sm transition-colors',
                 active
-                  ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground'
-                  : 'text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground',
+                  ? 'border-sidebar-primary font-medium text-sidebar-primary'
+                  : 'border-transparent text-muted-foreground hover:text-foreground',
               )}
             >
               <Icon className="size-4 shrink-0" />
@@ -63,7 +65,7 @@ export function BottomTabs({ counts }: { counts: NavCounts }) {
   const isActive = useActive();
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-3 border-t bg-background/95 backdrop-blur md:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 border-t bg-background/95 backdrop-blur md:hidden">
       {ITEMS.map(({ href, label, icon: Icon, key }) => {
         const active = isActive(href);
         const n = counts[key];
@@ -73,7 +75,7 @@ export function BottomTabs({ counts }: { counts: NavCounts }) {
             href={href}
             className={cn(
               'flex flex-col items-center gap-0.5 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] text-xs transition-colors',
-              active ? 'text-foreground' : 'text-muted-foreground',
+              active ? 'text-primary' : 'text-muted-foreground',
             )}
           >
             <span className="relative">

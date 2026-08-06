@@ -1,7 +1,8 @@
 import { and, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { getDb } from '@/db';
-import { cards, encounters, inbox, words, type Draft } from '@/db/schema';
+import { cards, categories, encounters, inbox, words, type Draft } from '@/db/schema';
+import { parseCategoryId } from '@/lib/categories';
 import { cleanContrasts, MAX_CONTRASTS } from '@/lib/contrasts';
 
 /**
@@ -10,7 +11,12 @@ import { cleanContrasts, MAX_CONTRASTS } from '@/lib/contrasts';
  * 这是整个流程里唯一写这三张表的地方 —— 没经过这里的东西不会进复习队列。
  */
 
-function parseDraft(body: unknown): Draft | null {
+/**
+ * 归类不在 Draft 里 —— Claude 不再猜分类，是人在审核页选的。
+ * 对比词在 Draft 里（`carve (cave)` 那种写法带过来的），但人可以在审核页改，
+ * 所以以请求体为准。
+ */
+function parseBody(body: unknown): { draft: Draft; categoryId: number } | null {
   if (typeof body !== 'object' || body === null) return null;
   const b = body as Record<string, unknown>;
   const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
@@ -19,9 +25,20 @@ function parseDraft(body: unknown): Draft | null {
   const definition = str(b.definition);
   const sentence = str(b.sentence);
   const cloze = str(b.cloze);
-  const domain = b.domain === 'work' || b.domain === 'daily' ? b.domain : null;
-  if (!target || !lemma || !definition || !sentence || !cloze || !domain) return null;
-  return { target, lemma, definition, domain, sentence, cloze, generated: b.generated === true };
+  const categoryId = parseCategoryId(b.categoryId);
+  if (!target || !lemma || !definition || !sentence || !cloze || !categoryId) return null;
+  return {
+    draft: {
+      target,
+      lemma,
+      definition,
+      sentence,
+      cloze,
+      generated: b.generated === true,
+      contrasts: cleanContrasts(b.contrasts) ?? [],
+    },
+    categoryId,
+  };
 }
 
 export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -31,13 +48,13 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   }
 
   const body = await request.json().catch(() => null);
-  const draft = parseDraft(body);
-  if (!draft) {
+  const parsed = parseBody(body);
+  if (!parsed) {
     return NextResponse.json({ error: '字段不完整' }, { status: 400 });
   }
-  // 对比词是 word 的属性，不在 Draft 里；没传就是空数组
-  const contrasts = cleanContrasts((body as { contrasts?: unknown })?.contrasts) ?? [];
-
+  const { draft, categoryId } = parsed;
+  // 对比词是 word 的属性，不是 encounter 的；Draft 里那份只是留档
+  const contrasts = draft.contrasts;
   const db = getDb();
 
   try {
@@ -49,11 +66,19 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         .limit(1);
       if (!row) throw new Error('NOT_PENDING');
 
-      // 同一个 lemma 在同一个 domain 下复用同一条 word；不同 domain 算两个词
+      // 分类可能在打开审核页之后被删掉了，写之前查一次
+      const [category] = await tx
+        .select({ id: categories.id })
+        .from(categories)
+        .where(eq(categories.id, categoryId))
+        .limit(1);
+      if (!category) throw new Error('NO_CATEGORY');
+
+      // 同一个 lemma 在同一个分类下复用同一条 word；不同分类算两个词
       const [existing] = await tx
         .select({ id: words.id, contrasts: words.contrasts })
         .from(words)
-        .where(and(eq(words.lemma, draft.lemma), eq(words.domain, draft.domain)))
+        .where(and(eq(words.lemma, draft.lemma), eq(words.categoryId, categoryId)))
         .limit(1);
 
       let wordId: number;
@@ -70,7 +95,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       } else {
         const [created] = await tx
           .insert(words)
-          .values({ lemma: draft.lemma, domain: draft.domain, contrasts })
+          .values({ lemma: draft.lemma, categoryId, contrasts })
           .returning({ id: words.id });
         wordId = created.id;
       }
@@ -103,6 +128,9 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   } catch (error) {
     if (error instanceof Error && error.message === 'NOT_PENDING') {
       return NextResponse.json({ error: '这条已经处理过了' }, { status: 409 });
+    }
+    if (error instanceof Error && error.message === 'NO_CATEGORY') {
+      return NextResponse.json({ error: '这个分类已经不存在了' }, { status: 400 });
     }
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }

@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "words_lemma_category_idx" ON "words" USING btree ("lemma","category_id");

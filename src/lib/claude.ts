@@ -14,7 +14,7 @@ const MODEL = 'claude-opus-5';
 export type ProcessInput = {
   id: number;
   rawText: string;
-  /** ios-share / mac / … —— 判断 work vs daily 的线索 */
+  /** ios-share / mac / … —— 只是原样带回，模型不用它做判断 */
   source: string;
 };
 
@@ -59,12 +59,7 @@ const SYSTEM = `你在帮一个中文母语者整理他的英语生词本。
    不要给例句（sentence 本身就是例句），不要罗列其他义项，不要写词性标注。
    多个近义中文词用分号隔开，例如：匆匆的；粗略的
 
-4. **domain** —— "work" 或 "daily"。
-   work = 工作、技术、商业、学术语境；daily = 生活、社交、新闻、娱乐语境。
-   判断依据首先是内容本身。source 字段是次要线索："mac" / "web" 多半是他在电脑前
-   工作时遇到的，"ios-share" 多半是手机上随便刷到的 —— 内容和 source 冲突时以内容为准。
-
-5. **cloze** —— **把 sentence 原样复制，只把 target 替换成三个下划线 \`___\`**，
+4. **cloze** —— **把 sentence 原样复制，只把 target 替换成三个下划线 \`___\`**，
    其余一个字符都不要改（标点、大小写全部保留）。`;
 
 const SCHEMA = {
@@ -79,7 +74,6 @@ const SCHEMA = {
           target: { type: 'string' },
           lemma: { type: 'string' },
           definition: { type: 'string' },
-          domain: { type: 'string', enum: ['work', 'daily'] },
           sentence: { type: 'string', description: '挖空前的完整句子' },
           cloze: { type: 'string' },
           generated: { type: 'boolean', description: 'sentence 是否由你造出来的' },
@@ -89,7 +83,6 @@ const SCHEMA = {
           'target',
           'lemma',
           'definition',
-          'domain',
           'sentence',
           'cloze',
           'generated',

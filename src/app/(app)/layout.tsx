@@ -1,7 +1,7 @@
 import { eq, lte, sql } from 'drizzle-orm';
 import { BottomTabs, Sidebar } from '@/components/app-nav';
 import { getDb } from '@/db';
-import { cards, inbox, words } from '@/db/schema';
+import { cards, categories, inbox, words } from '@/db/schema';
 
 /**
  * 应用外壳。`/login` 不在这个路由分组里，所以登录页是干净的一屏。
@@ -15,16 +15,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const db = getDb();
   const count = sql<number>`count(*)::int`;
 
-  const [[due], [pending], [wordCount]] = await Promise.all([
+  const [[due], [pending], [wordCount], [categoryCount]] = await Promise.all([
     db.select({ count }).from(cards).where(lte(cards.due, new Date())),
     db.select({ count }).from(inbox).where(eq(inbox.status, 'pending')),
     db.select({ count }).from(words),
+    db.select({ count }).from(categories),
   ]);
 
   const counts = {
     due: due.count,
     pending: pending.count,
     words: wordCount.count,
+    categories: categoryCount.count,
   };
 
   return (

@@ -29,7 +29,7 @@ type Card = {
  * 对比词**只在背面显示**：正面是填空题，把相似词摆出来会退化成多选题，
  * 削弱开放回忆的效果。背面的作用是「答完之后提醒你别和 X 搞混」。
  */
-export function ReviewSession({ domain }: { domain: 'work' | 'daily' }) {
+export function ReviewSession({ categoryId, name }: { categoryId: number; name: string }) {
   const [card, setCard] = useState<Card | null>(null);
   const [remaining, setRemaining] = useState(0);
   const [flipped, setFlipped] = useState(false);
@@ -39,7 +39,7 @@ export function ReviewSession({ domain }: { domain: 'work' | 'daily' }) {
   const load = useCallback(async () => {
     setLoading(true);
     setFlipped(false);
-    const response = await fetch(`/api/review?domain=${domain}`);
+    const response = await fetch(`/api/review?category=${categoryId}`);
     const data = (await response.json().catch(() => ({}))) as {
       card?: Card | null;
       remaining?: number;
@@ -52,7 +52,7 @@ export function ReviewSession({ domain }: { domain: 'work' | 'daily' }) {
     }
     setCard(data.card ?? null);
     setRemaining(data.remaining ?? 0);
-  }, [domain]);
+  }, [categoryId]);
 
   useEffect(() => {
     void load();
@@ -94,7 +94,7 @@ export function ReviewSession({ domain }: { domain: 'work' | 'daily' }) {
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col p-4 md:p-8">
       <div className="mb-6 flex items-baseline justify-between">
-        <h1 className="text-xl font-medium tracking-tight">{domain}</h1>
+        <h1 className="font-serif text-2xl font-medium tracking-tight">{name}</h1>
         <span className="text-sm text-muted-foreground">剩 {remaining} 张</span>
       </div>
 
@@ -111,14 +111,15 @@ export function ReviewSession({ domain }: { domain: 'work' | 'daily' }) {
         </div>
       ) : (
         <>
-          <div className="flex flex-1 flex-col justify-center gap-8">
+          <div className="flex flex-1 flex-col justify-center gap-10">
             {/* 正面：挖空原句。对比词绝不出现在这里 */}
-            <p className="text-center text-xl leading-relaxed">{card.clozeText}</p>
+            <p className="text-center font-serif text-2xl leading-[1.65]">{card.clozeText}</p>
 
             {flipped ? (
-              <Card className="gap-4 p-5">
+              /* 纸质风靠留白和发丝线分层，不靠盒子 —— Card 在这里只当布局容器 */
+              <Card className="gap-6 border-0 bg-transparent p-0 ring-0">
                 <div className="flex items-center justify-center gap-2">
-                  <span className="text-2xl font-medium">{card.lemma}</span>
+                  <span className="font-serif text-4xl font-medium">{card.lemma}</span>
                   <Button
                     variant="ghost"
                     size="icon"
@@ -139,27 +140,33 @@ export function ReviewSession({ domain }: { domain: 'work' | 'daily' }) {
                 />
 
                 <Separator />
-                <p className="text-center text-sm text-muted-foreground">{card.rawText}</p>
+                <p className="text-center font-serif text-[15px] italic leading-relaxed text-muted-foreground">
+                  {card.rawText}
+                </p>
               </Card>
             ) : (
-              <Button variant="outline" className="mx-auto" onClick={() => setFlipped(true)}>
+              <Button
+                variant="outline"
+                className="mx-auto h-auto px-6 py-2.5 font-normal"
+                onClick={() => setFlipped(true)}
+              >
                 翻面 <span className="ml-1 text-xs opacity-50">空格</span>
               </Button>
             )}
           </div>
 
           {flipped && (
-            <div className="grid grid-cols-4 gap-2 pt-8">
+            <div className="grid grid-cols-4 gap-2 pt-10">
               {GRADES.map((g, i) => (
                 <Button
                   key={g.grade}
                   variant="outline"
                   title={g.hint}
                   onClick={() => grade(g.grade)}
-                  className="h-auto flex-col gap-0.5 py-3"
+                  className="h-auto flex-col gap-0.5 rounded-sm py-3 font-normal"
                 >
                   <span>{g.label}</span>
-                  <span className="text-xs text-muted-foreground">{i + 1}</span>
+                  <span className="text-[11px] tabular-nums text-muted-foreground/60">{i + 1}</span>
                 </Button>
               ))}
             </div>
