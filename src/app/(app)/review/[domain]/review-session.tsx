@@ -92,7 +92,7 @@ export function ReviewSession({ domain }: { domain: 'work' | 'daily' }) {
   });
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col p-4 md:p-8">
+    <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col p-4 md:p-8">
       <div className="mb-6 flex items-baseline justify-between">
         <h1 className="text-xl font-medium tracking-tight">{domain}</h1>
         <span className="text-sm text-muted-foreground">剩 {remaining} 张</span>

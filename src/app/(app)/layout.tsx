@@ -30,8 +30,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex min-h-dvh">
       <Sidebar counts={counts} />
-      {/* 窄屏底部有标签栏，内容区留出空间，否则会盖住复习页的评分按钮 */}
-      <div className="min-w-0 flex-1 pb-20 md:pb-0">{children}</div>
+      {/*
+        窄屏底部有标签栏，内容区留出空间，否则会盖住复习页的评分按钮。
+        这里必须是 flex 列容器：复习页的 <main> 要靠 flex-1 撑满**剩余**高度，
+        它自己写 min-h-dvh 的话会撑满整个视口，底部按钮就跑到底栏下面去了。
+      */}
+      <div className="flex min-w-0 flex-1 flex-col pb-20 md:pb-0">{children}</div>
       <BottomTabs counts={counts} />
     </div>
   );
