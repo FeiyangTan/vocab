@@ -35,7 +35,7 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-dvh items-center justify-center p-6">
       <form onSubmit={handleSubmit} className="w-full max-w-xs space-y-4">
-        <h1 className="text-lg font-medium">vocab</h1>
+        <h1 className="text-center font-serif text-3xl font-medium tracking-tight">vocab</h1>
         <Input
           type="password"
           value={password}

@@ -15,6 +15,12 @@
   /* layout.tsx 里 next/font 注入的是 --font-geist-sans，不接上这里就是空值 */
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  /*
+   * 英文内容用衬线（`font-serif` 工具类），UI 外壳继续用 Geist。
+   * Newsreader 没有中文字形，中文会落到 PingFang —— 这是**有意**的：
+   * 「要读的英文」和「辅助的中文」自然分层，比配一套宋体在手机上更清楚。
+   */
+  --font-serif: var(--font-newsreader), Georgia, "Times New Roman", serif;
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -54,74 +60,82 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/*
+ * 纸质阅读风：暖白纸底 + 墨黑字 + 墨绿强调。
+ * shadcn 默认那套 `oklch(… 0 0)` 中性灰是「内部管理后台」的调子，
+ * 这里全量换成暖色 —— 用 hex 写，比 oklch 好核对。
+ */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --background: #faf7f2;
+  --foreground: #211d18;
+  --card: #fffcf7;
+  --card-foreground: #211d18;
+  --popover: #fffcf7;
+  --popover-foreground: #211d18;
+  --primary: #2f5d50;
+  --primary-foreground: #faf7f2;
+  --secondary: #f0eae0;
+  --secondary-foreground: #3a342c;
+  --muted: #f0eae0;
+  --muted-foreground: #8a8073;
+  --accent: #ede6da;
+  --accent-foreground: #2f5d50;
+  --destructive: #a8342a;
+  /* 发丝级：纸质风靠留白和细线分层，不靠盒子和阴影 */
+  --border: #e7dfd3;
+  --input: #ddd3c4;
+  --ring: #2f5d50;
+  --chart-1: #2f5d50;
+  --chart-2: #6f8f83;
+  --chart-3: #a89c8a;
+  --chart-4: #c9bda9;
+  --chart-5: #e7dfd3;
+  --radius: 0.25rem;
+  --sidebar: #f4efe7;
+  --sidebar-foreground: #211d18;
+  --sidebar-primary: #2f5d50;
+  --sidebar-primary-foreground: #faf7f2;
+  --sidebar-accent: #eae2d5;
+  --sidebar-accent-foreground: #2f5d50;
+  --sidebar-border: #e7dfd3;
+  --sidebar-ring: #2f5d50;
 }
 
+/* 暗色版的「纸」：不是纯黑，是墨底 —— 保持同一套暖色关系，只是明暗对调 */
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
+    --background: #14120f;
+    --foreground: #ede7dc;
+    --card: #1c1916;
+    --card-foreground: #ede7dc;
+    --popover: #1c1916;
+    --popover-foreground: #ede7dc;
+    /* 墨绿在深底上要提亮，否则和背景糊在一起 */
+    --primary: #7fb3a1;
+    --primary-foreground: #14120f;
+    --secondary: #262220;
+    --secondary-foreground: #ede7dc;
+    --muted: #262220;
+    --muted-foreground: #9b9184;
+    --accent: #2a2622;
+    --accent-foreground: #7fb3a1;
+    --destructive: #e0705f;
     --border: oklch(1 0 0 / 10%);
     --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --sidebar: oklch(0.205 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.488 0.243 264.376);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
+    --ring: #7fb3a1;
+    --chart-1: #7fb3a1;
+    --chart-2: #6f8f83;
+    --chart-3: #5b544b;
+    --chart-4: #3a342c;
+    --chart-5: #262220;
+    --sidebar: #1a1714;
+    --sidebar-foreground: #ede7dc;
+    --sidebar-primary: #7fb3a1;
+    --sidebar-primary-foreground: #14120f;
+    --sidebar-accent: #262220;
+    --sidebar-accent-foreground: #7fb3a1;
     --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.556 0 0);
+    --sidebar-ring: #7fb3a1;
   }
 }
 

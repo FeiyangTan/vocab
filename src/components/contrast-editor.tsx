@@ -2,7 +2,6 @@
 
 import { Plus, Volume2, X } from 'lucide-react';
 import { useState } from 'react';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { MAX_CONTRASTS } from '@/lib/contrasts';
 import { speak } from '@/lib/speak';
@@ -44,9 +43,15 @@ export function ContrastEditor({
         <span className="text-xs text-muted-foreground">别搞混</span>
       )}
 
+      {/*
+        不用 Badge 的灰底胶囊 —— 对比词是全站最像「纸上批注」的一处，
+        衬线斜体 + 墨绿下划线比方块 chip 更贴纸质风。
+      */}
       {value.map((word) => (
-        <Badge key={word} variant="outline" className="gap-1 py-1 pl-2.5 pr-1 font-normal">
-          {word}
+        <span key={word} className="inline-flex items-center gap-0.5">
+          <span className="font-serif text-[15px] italic text-primary underline decoration-border underline-offset-4">
+            {word}
+          </span>
           <button
             type="button"
             onClick={() => speak(word)}
@@ -60,11 +65,11 @@ export function ContrastEditor({
             onClick={() => onChange(value.filter((w) => w !== word))}
             aria-label={`删除 ${word}`}
             disabled={busy}
-            className="px-0.5 text-muted-foreground/60 hover:text-foreground"
+            className="px-0.5 text-muted-foreground/50 hover:text-foreground"
           >
             <X className="size-3" />
           </button>
-        </Badge>
+        </span>
       ))}
 
       {adding ? (
@@ -84,14 +89,14 @@ export function ContrastEditor({
             }
           }}
           placeholder="相近的词"
-          className="h-7 w-32 rounded-full px-3 text-sm"
+          className="h-7 w-32 rounded-sm px-2 font-serif text-[15px] italic"
         />
       ) : (
         <button
           type="button"
           onClick={() => setAdding(true)}
           disabled={busy || value.length >= MAX_CONTRASTS}
-          className="inline-flex items-center gap-1 rounded-full border border-dashed px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30"
+          className="inline-flex items-center gap-1 rounded-sm border border-dashed px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30"
         >
           <Plus className="size-3" />
           {value.length === 0 && '对比词'}
