@@ -1,8 +1,8 @@
 import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import { getDb } from '@/db';
+import { listCategories } from '@/db/queries';
 import { inbox } from '@/db/schema';
-import { CaptureBox } from './capture-box';
-import { ReviewList } from './review-list';
+import { InboxPanel } from './inbox-panel';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,11 +15,14 @@ export default async function InboxPage() {
       rawText: inbox.rawText,
       source: inbox.source,
       draft: inbox.draft,
+      categoryId: inbox.categoryId,
       createdAt: inbox.createdAt,
     })
     .from(inbox)
     .where(and(eq(inbox.status, 'pending'), isNotNull(inbox.draft)))
     .orderBy(inbox.id);
+
+  const cats = await listCategories();
 
   const [{ count: unprocessed }] = await db
     .select({ count: sql<number>`count(*)::int` })
@@ -28,13 +31,12 @@ export default async function InboxPage() {
 
   return (
     <main className="mx-auto w-full max-w-2xl p-4 md:p-8">
-      <h1 className="mb-6 text-xl font-medium tracking-tight">收集箱</h1>
+      <h1 className="mb-6 font-serif text-2xl font-medium tracking-tight">收集箱</h1>
 
-      <CaptureBox />
-
-      <ReviewList
+      <InboxPanel
         items={ready.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() }))}
         unprocessed={unprocessed}
+        categories={cats.map((c) => ({ id: c.id, name: c.name, isDefault: c.isDefault }))}
       />
     </main>
   );

@@ -1,8 +1,10 @@
+import { eq } from 'drizzle-orm';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { getDb } from '@/db';
-import { inbox } from '@/db/schema';
+import { categories, inbox } from '@/db/schema';
 import { COOKIE_NAME, isValidInboxToken, isValidSession } from '@/lib/auth';
+import { parseCategoryId } from '@/lib/categories';
 
 /**
  * 捕获落点。**两种身份都收**：
@@ -12,12 +14,15 @@ import { COOKIE_NAME, isValidInboxToken, isValidSession } from '@/lib/auth';
  *
  * 这条路由在 proxy.ts 的 PUBLIC_PATHS 里（proxy 不拦），所以两种校验都得在这里自己做。
  *
- * 原文照存：不做词形还原、不去重、不判断 domain、不挖空。
+ * 原文照存：不做词形还原、不去重、不归类、不挖空。
  * 那些都是整理阶段的事 —— 捕获阶段任何加工都是在给 3 秒预算加负担。
  *
  * 唯一的例外是 `split: true` 时按行拆成多条，**只有网页输入框会传这个字段**。
  * 快捷指令不传 → iOS 那条链路的行为一个字节都不变（分享网页时 iOS 传过来的是
  * 「页面文案 + 换行 + URL」，拆开会每次多出一条只有 URL 的垃圾条目）。
+ *
+ * `category_id` 同样是可选的：网页输入框会传，快捷指令不传。不传就是 null，
+ * 审核页遇到 null 退回默认分类 —— 归类仍然不是捕获阶段的必答题。
  */
 
 export async function POST(request: Request) {
@@ -33,11 +38,13 @@ export async function POST(request: Request) {
   let rawText: string;
   let source = 'unknown';
   let split = false;
+  let categoryId: number | null = null;
   try {
     const body = (await request.json()) as {
       raw_text?: unknown;
       source?: unknown;
       split?: unknown;
+      category_id?: unknown;
     };
     if (typeof body.raw_text !== 'string' || body.raw_text.trim().length === 0) {
       return NextResponse.json({ error: 'raw_text 不能为空' }, { status: 400 });
@@ -45,6 +52,12 @@ export async function POST(request: Request) {
     rawText = body.raw_text;
     if (typeof body.source === 'string' && body.source.length > 0) source = body.source;
     split = body.split === true;
+    if (body.category_id !== undefined && body.category_id !== null) {
+      categoryId = parseCategoryId(body.category_id);
+      if (!categoryId) {
+        return NextResponse.json({ error: 'category_id 必须是分类 id' }, { status: 400 });
+      }
+    }
   } catch {
     return NextResponse.json({ error: 'body 必须是 JSON' }, { status: 400 });
   }
@@ -60,10 +73,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'raw_text 不能为空' }, { status: 400 });
   }
 
+  const db = getDb();
+
+  if (categoryId) {
+    const [found] = await db
+      .select({ id: categories.id })
+      .from(categories)
+      .where(eq(categories.id, categoryId))
+      .limit(1);
+    if (!found) {
+      return NextResponse.json({ error: '分类不存在' }, { status: 400 });
+    }
+  }
+
   try {
-    const rows = await getDb()
+    const rows = await db
       .insert(inbox)
-      .values(texts.map((t) => ({ rawText: t, source })))
+      .values(texts.map((t) => ({ rawText: t, source, categoryId })))
       .returning({ id: inbox.id });
     return NextResponse.json({ ids: rows.map((r) => r.id), count: rows.length }, { status: 201 });
   } catch (error) {

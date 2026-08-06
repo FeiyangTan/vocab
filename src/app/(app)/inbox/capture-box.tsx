@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
+import type { CategoryOption } from './review-list';
 
 /**
  * 网页端手动添加。
@@ -17,8 +18,19 @@ import { Textarea } from '@/components/ui/textarea';
  *
  * 默认**按行拆成多条**（一次录一串单词很常见）。但 PDF / 电子书复制过来的句子带的是
  * 排版折行，不是句子边界，拆了会变成残句 —— 所以给一个「整段当一条」的开关。
+ *
+ * 那排「存到」按钮渲染在这里，但 state 在 `InboxPanel` 上 —— 它是个总开关，
+ * 下面的审核卡也要读同一个值。
  */
-export function CaptureBox() {
+export function CaptureBox({
+  categories,
+  categoryId,
+  onCategoryChange,
+}: {
+  categories: CategoryOption[];
+  categoryId: number | null;
+  onCategoryChange: (id: number) => void;
+}) {
   const router = useRouter();
   const [text, setText] = useState('');
   const [asOne, setAsOne] = useState(false);
@@ -36,7 +48,12 @@ export function CaptureBox() {
     const response = await fetch('/api/inbox', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ raw_text: text, source: 'web', split: !asOne }),
+      body: JSON.stringify({
+        raw_text: text,
+        source: 'web',
+        split: !asOne,
+        category_id: categoryId,
+      }),
     });
 
     setPending(false);
@@ -62,9 +79,26 @@ export function CaptureBox() {
           }
         }}
         rows={3}
-        placeholder="粘贴英文句子，或一行一个单词…"
-        className="resize-y"
+        placeholder="粘贴英文句子，或一行一个单词。carve (cave) —— 括号里的当对比词"
+        className="resize-y font-serif text-[15px] leading-relaxed"
       />
+
+      {categories.length > 1 && (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-xs text-muted-foreground">存到</span>
+          {categories.map((c) => (
+            <Button
+              key={c.id}
+              size="xs"
+              variant={categoryId === c.id ? 'default' : 'outline'}
+              className="font-normal"
+              onClick={() => onCategoryChange(c.id)}
+            >
+              {c.name}
+            </Button>
+          ))}
+        </div>
+      )}
 
       <div className="mt-2 flex items-center justify-between gap-3">
         <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
