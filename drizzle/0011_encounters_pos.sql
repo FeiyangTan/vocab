@@ -1,0 +1,1 @@
+ALTER TABLE "encounters" ADD COLUMN "pos" text;

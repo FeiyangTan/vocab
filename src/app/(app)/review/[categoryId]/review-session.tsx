@@ -1,9 +1,10 @@
 'use client';
 
-import { Volume2 } from 'lucide-react';
+import { ChevronLeft } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { ContrastRow } from '@/components/contrast-row';
+import { RemarkRow } from '@/components/remark-row';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -15,9 +16,11 @@ type Card = {
   clozeText: string;
   lemma: string;
   note: string | null;
+  pos: string | null;
   rawText: string;
   wordId: number;
   contrasts: string[];
+  remark: string | null;
 };
 
 /**
@@ -29,9 +32,18 @@ type Card = {
  * 对比词**只在背面显示**：正面是填空题，把相似词摆出来会退化成多选题，
  * 削弱开放回忆的效果。背面的作用是「答完之后提醒你别和 X 搞混」。
  */
-export function ReviewSession({ categoryId, name }: { categoryId: number; name: string }) {
+export function ReviewSession({
+  scope,
+  name,
+}: {
+  /** 分类 id 或 `'all'`。直接拼进查询串，所以是字符串不是数字 */
+  scope: string;
+  name: string;
+}) {
   const [card, setCard] = useState<Card | null>(null);
   const [remaining, setRemaining] = useState(0);
+  /** 对比词 → 中文，跟卡片一起从接口拿 */
+  const [glosses, setGlosses] = useState<Record<string, string>>({});
   const [flipped, setFlipped] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -39,10 +51,11 @@ export function ReviewSession({ categoryId, name }: { categoryId: number; name: 
   const load = useCallback(async () => {
     setLoading(true);
     setFlipped(false);
-    const response = await fetch(`/api/review?category=${categoryId}`);
+    const response = await fetch(`/api/review?category=${scope}`);
     const data = (await response.json().catch(() => ({}))) as {
       card?: Card | null;
       remaining?: number;
+      glosses?: Record<string, string>;
       error?: string;
     };
     setLoading(false);
@@ -52,7 +65,8 @@ export function ReviewSession({ categoryId, name }: { categoryId: number; name: 
     }
     setCard(data.card ?? null);
     setRemaining(data.remaining ?? 0);
-  }, [categoryId]);
+    setGlosses(data.glosses ?? {});
+  }, [scope]);
 
   useEffect(() => {
     void load();
@@ -93,9 +107,17 @@ export function ReviewSession({ categoryId, name }: { categoryId: number; name: 
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col p-4 md:p-8">
-      <div className="mb-6 flex items-baseline justify-between">
-        <h1 className="font-serif text-2xl font-medium tracking-tight">{name}</h1>
-        <span className="text-sm text-muted-foreground">剩 {remaining} 张</span>
+      <div className="mb-6 flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-1">
+          {/* 常驻出口 —— 以前只有队列复习完时才有「回队列列表」，中途想换分类没地方点 */}
+          <Button asChild variant="ghost" size="icon-sm" className="-ml-1 shrink-0">
+            <Link href="/review" aria-label="回队列列表">
+              <ChevronLeft className="size-4" />
+            </Link>
+          </Button>
+          <h1 className="truncate font-serif text-2xl font-medium tracking-tight">{name}</h1>
+        </div>
+        <span className="shrink-0 text-sm text-muted-foreground">剩 {remaining} 张</span>
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
@@ -118,31 +140,51 @@ export function ReviewSession({ categoryId, name }: { categoryId: number; name: 
             {flipped ? (
               /* 纸质风靠留白和发丝线分层，不靠盒子 —— Card 在这里只当布局容器 */
               <Card className="gap-6 border-0 bg-transparent p-0 ring-0">
-                <div className="flex items-center justify-center gap-2">
-                  <span className="font-serif text-4xl font-medium">{card.lemma}</span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label="发音"
-                    onClick={() => speak(card.lemma)}
-                  >
-                    <Volume2 className="size-4" />
-                  </Button>
-                </div>
+                {/* 词本身就是发音按钮，和对比词一致 —— 不再挂单独的喇叭图标 */}
+                <button
+                  type="button"
+                  aria-label={`朗读 ${card.lemma}`}
+                  onClick={() => speak(card.lemma)}
+                  className="mx-auto block font-serif text-4xl font-medium transition-colors hover:text-primary"
+                >
+                  {card.lemma}
+                </button>
 
-                {card.note && <p className="text-center text-base">{card.note}</p>}
+                {card.note && (
+                  <p className="text-center text-base">
+                    {card.pos && (
+                      <span className="mr-1 text-muted-foreground">{card.pos}</span>
+                    )}
+                    {card.note}
+                  </p>
+                )}
 
                 <Separator />
                 <ContrastRow
                   wordId={card.wordId}
                   contrasts={card.contrasts}
                   onChange={(next) => setCard({ ...card, contrasts: next })}
+                  glosses={glosses}
                 />
 
                 <Separator />
-                <p className="text-center font-serif text-[15px] italic leading-relaxed text-muted-foreground">
+                {/* 原句本身就是发音按钮，和单词、对比词一致 */}
+                <button
+                  type="button"
+                  aria-label="朗读例句"
+                  onClick={() => speak(card.rawText)}
+                  className="block w-full text-center font-serif text-[15px] italic leading-relaxed text-muted-foreground transition-colors hover:text-foreground"
+                >
                   {card.rawText}
-                </p>
+                </button>
+
+                {/* 备注放最后 —— 原句是这次遇到它的语境，备注是自己加的注解，压轴 */}
+                <Separator />
+                <RemarkRow
+                  wordId={card.wordId}
+                  remark={card.remark}
+                  onChange={(next) => setCard({ ...card, remark: next })}
+                />
               </Card>
             ) : (
               <Button

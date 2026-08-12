@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { getDb } from '@/db';
 import { words } from '@/db/schema';
 import { cleanContrasts } from '@/lib/contrasts';
+import { contrastHintsFor } from '@/lib/dictionary';
 
 /**
  * 设置一个词的对比词。`PUT /api/words/{id}/contrasts` body `{ contrasts: string[] }`
@@ -32,5 +33,6 @@ export async function PUT(request: Request, ctx: { params: Promise<{ id: string 
   if (updated.length === 0) {
     return NextResponse.json({ error: '词不存在' }, { status: 404 });
   }
-  return NextResponse.json({ ok: true, contrasts });
+  // 带上中文，前端新加的词立刻就有 tooltip，不用刷新
+  return NextResponse.json({ ok: true, contrasts, glosses: contrastHintsFor(contrasts) });
 }

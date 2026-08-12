@@ -4,6 +4,8 @@ import { getDb } from '@/db';
 import { cards, categories, encounters, inbox, words, type Draft } from '@/db/schema';
 import { parseCategoryId } from '@/lib/categories';
 import { cleanContrasts, MAX_CONTRASTS } from '@/lib/contrasts';
+import { zipfOf } from '@/lib/frequency';
+import { cleanRemark } from '@/lib/remark';
 
 /**
  * 批量确认。`POST /api/inbox/confirm-batch`
@@ -44,7 +46,9 @@ function parseItems(value: unknown): Item[] | null {
       sentence,
       cloze,
       generated: b.generated === true,
+      pos: typeof b.pos === 'string' ? b.pos.trim().slice(0, 12) : '',
       contrasts: cleanContrasts(b.contrasts) ?? [],
+      remark: cleanRemark(b.remark),
     });
   }
   return out;
@@ -99,50 +103,73 @@ export async function POST(request: Request) {
       // ③ 已经存在的词
       const lemmas = [...new Set(todo.map((i) => i.lemma))];
       const existing = await tx
-        .select({ id: words.id, lemma: words.lemma, contrasts: words.contrasts })
+        .select({
+          id: words.id,
+          lemma: words.lemma,
+          contrasts: words.contrasts,
+          remark: words.remark,
+        })
         .from(words)
         .where(and(eq(words.categoryId, categoryId), inArray(words.lemma, lemmas)));
       const wordIdByLemma = new Map(existing.map((w) => [w.lemma, w.id]));
 
-      // ④ 批内先按 lemma 聚合 —— 同一批里两条 `dare` 共用一条 word，对比词取并集
+      // ④ 批内先按 lemma 聚合 —— 同一批里两条 `dare` 共用一条 word，对比词取并集。
+      //    备注是自由文本没法合并，取**第一条非空的**（和「先到先得」一致）
       const contrastsByLemma = new Map<string, string[]>();
+      const remarkByLemma = new Map<string, string | null>();
       for (const item of todo) {
         const merged = new Set(contrastsByLemma.get(item.lemma) ?? []);
         for (const c of item.contrasts) merged.add(c);
         contrastsByLemma.set(item.lemma, [...merged].slice(0, MAX_CONTRASTS));
+        remarkByLemma.set(item.lemma, remarkByLemma.get(item.lemma) ?? item.remark);
       }
 
       // ⑤ 新词一次插完。lemma 在这个分类里唯一（有唯一索引），所以能靠它对回 id
       const newLemmas = lemmas.filter((l) => !wordIdByLemma.has(l));
       if (newLemmas.length > 0) {
+        // 新词排在这个分类的末尾 —— 默认 0 会排到最前，不是想要的
+        const [{ maxOrder }] = await tx
+          .select({ maxOrder: sql<number>`coalesce(max(${words.sortOrder}), 0)::int` })
+          .from(words)
+          .where(eq(words.categoryId, categoryId));
         const created = await tx
           .insert(words)
           .values(
-            newLemmas.map((lemma) => ({
+            newLemmas.map((lemma, n) => ({
               lemma,
               categoryId,
               contrasts: contrastsByLemma.get(lemma) ?? [],
+              remark: remarkByLemma.get(lemma) ?? null,
+              sortOrder: maxOrder + n + 1,
+              zipf: zipfOf(lemma),
             })),
           )
           .returning({ id: words.id, lemma: words.lemma });
         for (const w of created) wordIdByLemma.set(w.lemma, w.id);
       }
 
-      // ⑥ 已有词的对比词**合并而不是覆盖** —— 第二次遇到同一个词，不该抹掉上次加的
-      const merges: { id: number; contrasts: string[] }[] = [];
+      // ⑥ 已有词的对比词**合并而不是覆盖** —— 第二次遇到同一个词，不该抹掉上次加的。
+      //    备注同理，但没法取并集，所以**先到先得**：已经写过就保留原样
+      const merges: { id: number; contrasts: string[]; remark: string | null }[] = [];
       for (const w of existing) {
         const incoming = contrastsByLemma.get(w.lemma) ?? [];
         const merged = [...new Set([...w.contrasts, ...incoming])].slice(0, MAX_CONTRASTS);
-        if (merged.length !== w.contrasts.length) merges.push({ id: w.id, contrasts: merged });
+        const remark = w.remark ?? remarkByLemma.get(w.lemma) ?? null;
+        if (merged.length !== w.contrasts.length || remark !== w.remark) {
+          merges.push({ id: w.id, contrasts: merged, remark });
+        }
       }
       if (merges.length > 0) {
         await tx.execute(sql`
           UPDATE ${words} AS w
-          SET contrasts = v.contrasts::jsonb
+          SET contrasts = v.contrasts::jsonb, remark = v.remark
           FROM (VALUES ${sql.join(
-            merges.map((m) => sql`(${m.id}::bigint, ${JSON.stringify(m.contrasts)}::text)`),
+            merges.map(
+              (m) =>
+                sql`(${m.id}::bigint, ${JSON.stringify(m.contrasts)}::text, ${m.remark}::text)`,
+            ),
             sql`, `,
-          )}) AS v(id, contrasts)
+          )}) AS v(id, contrasts, remark)
           WHERE w.id = v.id
         `);
       }
@@ -165,6 +192,7 @@ export async function POST(request: Request) {
             ? `${sourceById.get(item.id)}+ai`
             : sourceById.get(item.id)!,
           note: item.definition,
+          pos: item.pos || null,
         })),
       );
 

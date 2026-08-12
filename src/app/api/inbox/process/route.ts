@@ -46,8 +46,10 @@ export async function POST() {
     // Claude 回填的 id 必须是我们发过去的那批之一，否则丢弃 —— 别让模型的输出决定写哪一行
     if (!wanted.has(d.id)) continue;
     const { id, ...rest } = d;
-    // 对比词不来自模型（schema 里就没这个字段），在这儿并进去
-    const draft = { ...rest, contrasts: contrastsById.get(id) ?? [] };
+    // 对比词和备注都不来自模型（schema 里就没这两个字段），在这儿并进去。
+    // 备注只能人手填，捕获阶段没有它的位置，所以初值一律 null
+    const draft = { ...rest, contrasts: contrastsById.get(id) ?? [], remark: null };
+
     await db.update(inbox).set({ draft }).where(eq(inbox.id, id));
     processed += 1;
   }

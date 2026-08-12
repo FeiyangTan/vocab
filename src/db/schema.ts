@@ -2,6 +2,7 @@ import {
   bigint,
   bigserial,
   boolean,
+  doublePrecision,
   index,
   integer,
   jsonb,
@@ -38,13 +39,17 @@ export type Draft = {
   lemma: string;
   /** 中文释义 */
   definition: string;
+  /** 词性简写，按这句话里的实际用法（`n.` / `v.` / `a.` …）。给不出就空串 */
+  pos: string;
   /**
    * `carve (cave)` 这种写法里括号中的对比词。
    *
-   * **不是 Claude 产出的** —— 对比词一直是纯人工的（哪两个词会互相干扰极度个人化）。
+   * 整理阶段的 prompt **不产出**对比词 —— 那一步是从原文抽字段。
    * 这里只是把人在捕获时就顺手写下的那几个带到审核页去，省得再敲一遍。
    */
   contrasts: string[];
+  /** 手写备注，随确认一起提交。AI 不产出这个字段 */
+  remark: string | null;
   /** cloze 挖空前的完整句子 */
   sentence: string;
   /** sentence 挖掉目标词，用 ___ 占位 */
@@ -118,11 +123,53 @@ export const words = pgTable(
     /**
      * 对比词：拼写或读音相近、容易记混的词（cursory / cursor / courtesy）。
      *
-     * **纯人工填，AI 不碰** —— 哪两个词会互相干扰是极度个人化的，只有本人知道
-     * 自己栽在哪一对上。挂在 word 而不是 encounter 上，因为混淆是词本身的属性，
-     * 同一个词的多次 encounter 应该共享同一组对比词。
+     * 挂在 word 而不是 encounter 上，因为混淆是词本身的属性，同一个词的多次
+     * encounter 应该共享同一组对比词。
+     *
+     * 两个来源：手动敲，或点「AI 匹配」让 Claude 找形近/音近的词
+     *（`POST /api/words/{id}/contrasts/suggest`）。两者**合并不覆盖** ——
+     * 手动加的是自己栽过跟头才记下的，不能被模型的建议冲掉。
      */
     contrasts: jsonb('contrasts').$type<string[]>().notNull().default([]),
+    /**
+     * 手写备注。**纯人工，AI 不碰** —— 和对比词一样，这是只有本人知道的东西：
+     * 这个词为什么难记、在哪儿见过、老板邮件里怎么用的。
+     *
+     * 挂在 word 不挂在 encounter：备注是对「这个词」的注解，同一个词的多次
+     * encounter 应该共享它。可空 —— 没写过和写了空串是一回事。
+     *
+     * 叫 remark 不叫 note：`encounters.note` 已经是「释义」了，
+     * 同一个仓库里两个 note 指两样东西，迟早看错。
+     */
+    remark: text('remark'),
+    /**
+     * 手动排序用。初始值按 lemma 字母序回填，所以不拖的话看上去和以前一样。
+     * 新确认的词取所在分类的 `max+1`，落到末尾（默认 0 会排到最前，不对）。
+     */
+    sortOrder: integer('sort_order').notNull().default(0),
+    /**
+     * 词频指标（Zipf，见 `src/lib/frequency.ts`）。**可空** —— null 是
+     *「SUBTLEX 里没收录」（词组、专名），和「频率为 0」不是一回事。
+     */
+    zipf: real('zipf'),
+    /**
+     * 「快速过词」本轮已经标过「认识」，出队。一轮结束时整批置回 false。
+     *
+     * 和 `cards` 的复习进度**完全无关** —— 快速过词是按词频把整个分类刷一遍的
+     * 分拣动作，挖空复习是间隔重复，两套各走各的，互相不写对方的字段。
+     */
+    triageDone: boolean('triage_done').notNull().default(false),
+    /**
+     * 「快速过词」本轮的队列位置。**null = 不在任何一轮里**。
+     *
+     * 开一轮时按词频序打成 1,2,3…（口径同 `/api/words/reorder-by-frequency`）。
+     * 标「不认识」时插到后面第 10、11 位之间 —— 所以是 double precision 不是
+     * integer，整数之间得塞得下值。
+     *
+     * 不复用 `sortOrder`：那是你手动拖出来的顺序，这一轮的队列会被「不认识」
+     * 反复打乱，两者混在一列里，退出这个模式之后词汇页的顺序就毁了。
+     */
+    triageOrder: doublePrecision('triage_order'),
     createdAt: createdAt(),
   },
   (t) => [
@@ -148,6 +195,14 @@ export const encounters = pgTable(
     rawText: text('raw_text').notNull(),
     source: text('source').notNull(),
     note: text('note'),
+    /**
+     * 词性，按**这一次的语境**判定（`n.` / `v.` / `a.` …）。
+     *
+     * 和 `note` 同一层，都随语境走 —— `tear` 在一句里是 n. 眼泪、另一句里是
+     * v. 撕破。不查词典是因为词典给的是全部义项：221 个词里 57% 有 2 个以上词性，
+     * 贴上去一半以上是噪音。Claude 看得到句子，知道这里用的是哪个。
+     */
+    pos: text('pos'),
     createdAt: createdAt(),
   },
   (t) => [index('encounters_word_id_idx').on(t.wordId)],
@@ -174,4 +229,34 @@ export const cards = pgTable(
     index('cards_due_idx').on(t.due),
     index('cards_encounter_id_idx').on(t.encounterId),
   ],
+);
+
+/**
+ * Claude API 的用量记录，一次调用一行。
+ *
+ * SDK 每次响应里都带 `usage`，以前直接丢掉了。落库之后 `/usage` 页面就能按用途和
+ * 按天看，**零额外成本、不需要新密钥**。
+ *
+ * 为什么不按天聚合：行数很小（一天几十次撑死），留着明细才能按用途拆，
+ * 以后想加维度也不用改历史数据。
+ *
+ * 🔴 **不存金额** —— 单价会变，硬编码算出来的「花了多少钱」是假精确。
+ * 顺带一提，Anthropic **没有**查余额的接口（Admin API 只有用量和已花费，
+ * 而且对个人账号不开放），所以「还剩多少」只能去 Console 看。
+ */
+export const apiUsage = pgTable(
+  'api_usage',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    /** 干什么用的：process（整理草稿）/ contrast（AI 匹配对比词） */
+    purpose: text('purpose').notNull(),
+    model: text('model').notNull(),
+    inputTokens: integer('input_tokens').notNull().default(0),
+    outputTokens: integer('output_tokens').notNull().default(0),
+    /** 缓存命中的输入 token —— 计价比普通输入便宜得多，分开记才看得出优化效果 */
+    cacheReadTokens: integer('cache_read_tokens').notNull().default(0),
+    cacheWriteTokens: integer('cache_write_tokens').notNull().default(0),
+    createdAt: createdAt(),
+  },
+  (t) => [index('api_usage_created_at_idx').on(t.createdAt)],
 );

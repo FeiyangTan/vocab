@@ -25,3 +25,17 @@ export function parseCategoryId(value: unknown): number | null {
   if (typeof n !== 'number' || !Number.isInteger(n) || n <= 0) return null;
   return n;
 }
+
+/**
+ * 复习范围：某个分类，或者 `'all'`（不挑分类，四个分类混着过）。
+ *
+ * 两种复习模式共用。分类 id 和 `'all'` 走同一个参数位，所以 `/review/5` 和
+ * `/review/all` 能落在同一个动态路由上，不用为「全部」再开一套页面。
+ */
+export type Scope = number | 'all';
+
+/** `parseCategoryId` 的超集：多认一个 `'all'`。 */
+export function parseScope(value: unknown): Scope | null {
+  if (value === 'all') return 'all';
+  return parseCategoryId(value);
+}

@@ -11,6 +11,7 @@ import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import type { Draft } from '@/db/schema';
 import { CONFIRM_BATCH_SIZE, PROCESS_BATCH_SIZE } from '@/lib/batch';
+import { MAX_REMARK } from '@/lib/remark';
 
 /** 判定为「滑动」的最小横向位移（px）。再小就会被日常的手指抖动误触发 */
 const SWIPE_THRESHOLD = 60;
@@ -376,6 +377,7 @@ function ReviewCard({
   const [target, setTarget] = useState(d.target);
   const [lemma, setLemma] = useState(d.lemma);
   const [definition, setDefinition] = useState(d.definition);
+  const [pos, setPos] = useState(d.pos ?? '');
   // 归类不在这里选，跟着顶部那个总开关走。改开关，这一行立刻变
   const categoryName = categories.find((c) => c.id === categoryId)?.name ?? null;
   const [sentence, setSentence] = useState(d.sentence ?? item.rawText);
@@ -383,6 +385,8 @@ function ReviewCard({
   // 词这时还不存在（确认的事务里才创建），所以只能攒在本地，随确认一起提交。
   // 初值来自 `carve (cave)` 那种写法里括号中的词 —— 捕获时写过就不用再敲一遍
   const [contrasts, setContrasts] = useState<string[]>(d.contrasts ?? []);
+  // 词这时还不存在，没有 id 可 PUT —— 和对比词一样攒本地，随「确认」一起提交
+  const [remark, setRemark] = useState(d.remark ?? '');
   const [pending, setPending] = useState<'confirm' | 'discard' | null>(null);
   const [error, setError] = useState('');
 
@@ -395,7 +399,9 @@ function ReviewCard({
     sentence,
     cloze,
     generated: d.generated ?? false,
+    pos,
     contrasts,
+    remark: remark.trim() || null,
   };
 
   /**
@@ -454,14 +460,28 @@ function ReviewCard({
           }}
           serif
         />
-        <Field
-          label="释义"
-          value={definition}
-          onChange={(v) => {
-            setDefinition(v);
-            edit('definition', v);
-          }}
-        />
+        <div className="flex gap-3">
+          <div className="w-20 shrink-0">
+            <Field
+              label="词性"
+              value={pos}
+              onChange={(v) => {
+                setPos(v);
+                edit('pos', v);
+              }}
+            />
+          </div>
+          <div className="min-w-0 flex-1">
+            <Field
+              label="释义"
+              value={definition}
+              onChange={(v) => {
+                setDefinition(v);
+                edit('definition', v);
+              }}
+            />
+          </div>
+        </div>
 
         {/* 只读 —— 归类是存入时定的。显示出来是因为「这条进了哪儿」不该是盲区 */}
         <div>
@@ -509,7 +529,7 @@ function ReviewCard({
 
         <div>
           <div className="mb-1 text-xs text-muted-foreground">
-            对比词（复习时在背面显示，AI 不填）
+            对比词（复习时在背面显示）
           </div>
           <ContrastEditor
             value={contrasts}
@@ -518,6 +538,21 @@ function ReviewCard({
               edit('contrasts', next);
             }}
             compact
+          />
+        </div>
+
+        <div>
+          <div className="mb-1 text-xs text-muted-foreground">备注（手写，AI 不填）</div>
+          <Textarea
+            value={remark}
+            maxLength={MAX_REMARK}
+            onChange={(e) => {
+              setRemark(e.target.value);
+              edit('remark', e.target.value.trim() || null);
+            }}
+            rows={2}
+            placeholder="为什么难记、在哪儿见过…"
+            className="text-sm"
           />
         </div>
       </div>

@@ -1,9 +1,11 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { getDb } from '@/db';
 import { cards, categories, encounters, inbox, words, type Draft } from '@/db/schema';
 import { parseCategoryId } from '@/lib/categories';
 import { cleanContrasts, MAX_CONTRASTS } from '@/lib/contrasts';
+import { zipfOf } from '@/lib/frequency';
+import { cleanRemark } from '@/lib/remark';
 
 /**
  * 审核确认：把（可能被人改过的）草稿真正写成 word + encounter + card。
@@ -35,7 +37,9 @@ function parseBody(body: unknown): { draft: Draft; categoryId: number } | null {
       sentence,
       cloze,
       generated: b.generated === true,
+      pos: typeof b.pos === 'string' ? b.pos.trim().slice(0, 12) : '',
       contrasts: cleanContrasts(b.contrasts) ?? [],
+      remark: cleanRemark(b.remark),
     },
     categoryId,
   };
@@ -76,7 +80,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
 
       // 同一个 lemma 在同一个分类下复用同一条 word；不同分类算两个词
       const [existing] = await tx
-        .select({ id: words.id, contrasts: words.contrasts })
+        .select({ id: words.id, contrasts: words.contrasts, remark: words.remark })
         .from(words)
         .where(and(eq(words.lemma, draft.lemma), eq(words.categoryId, categoryId)))
         .limit(1);
@@ -89,13 +93,28 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
           0,
           MAX_CONTRASTS,
         );
-        if (merged.length !== existing.contrasts.length) {
-          await tx.update(words).set({ contrasts: merged }).where(eq(words.id, wordId));
+        // 备注是自由文本，没法像对比词那样取并集，所以**先到先得**：
+        // 已经写过就保留，第二次遇到同一个词时确认不该把上次手写的抹掉
+        const remark = existing.remark ?? draft.remark;
+        if (merged.length !== existing.contrasts.length || remark !== existing.remark) {
+          await tx.update(words).set({ contrasts: merged, remark }).where(eq(words.id, wordId));
         }
       } else {
+        // 新词排在这个分类的末尾 —— 默认 0 会排到最前，不是想要的
+        const [{ max }] = await tx
+          .select({ max: sql<number>`coalesce(max(${words.sortOrder}), 0)::int` })
+          .from(words)
+          .where(eq(words.categoryId, categoryId));
         const [created] = await tx
           .insert(words)
-          .values({ lemma: draft.lemma, categoryId, contrasts })
+          .values({
+            lemma: draft.lemma,
+            categoryId,
+            contrasts,
+            remark: draft.remark,
+            sortOrder: max + 1,
+            zipf: zipfOf(draft.lemma),
+          })
           .returning({ id: words.id });
         wordId = created.id;
       }
@@ -111,6 +130,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
           rawText: draft.sentence,
           source: draft.generated ? `${row.source}+ai` : row.source,
           note: draft.definition,
+          // 空串当没有 —— 模型拿不准时给的就是空串
+          pos: draft.pos || null,
         })
         .returning({ id: encounters.id });
 

@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
-import type { Draft } from '@/db/schema';
+import { getDb } from '@/db';
+import { apiUsage, type Draft } from '@/db/schema';
 
 /**
  * 整理阶段：把 inbox 里的原始文本拆成能做成复习卡的五个字段。
@@ -10,6 +11,28 @@ import type { Draft } from '@/db/schema';
  */
 
 const MODEL = 'claude-opus-5';
+
+/**
+ * 把这次调用的 token 数记下来，供 `/usage` 页面统计。
+ *
+ * 🔴 **记录失败绝不能影响主流程** —— 整理明明成功了，却因为写用量表出错而整体
+ * 报错，是本末倒置。所以整段吞掉异常，只在服务端日志里留一条。
+ */
+async function record(purpose: string, usage: Anthropic.Usage | undefined) {
+  if (!usage) return;
+  try {
+    await getDb().insert(apiUsage).values({
+      purpose,
+      model: MODEL,
+      inputTokens: usage.input_tokens ?? 0,
+      outputTokens: usage.output_tokens ?? 0,
+      cacheReadTokens: usage.cache_read_input_tokens ?? 0,
+      cacheWriteTokens: usage.cache_creation_input_tokens ?? 0,
+    });
+  } catch (error) {
+    console.error('[usage] 记录失败（不影响主流程）:', error);
+  }
+}
 
 export type ProcessInput = {
   id: number;
@@ -56,10 +79,17 @@ const SYSTEM = `你在帮一个中文母语者整理他的英语生词本。
 2. **lemma** —— target 的词形还原（"glancing" → "glance"，"cursory" → "cursory"）。
 
 3. **definition** —— 中文释义，**简短**，只给这个词在**这个语境下**的意思。
-   不要给例句（sentence 本身就是例句），不要罗列其他义项，不要写词性标注。
+   不要给例句（sentence 本身就是例句），不要罗列其他义项。
    多个近义中文词用分号隔开，例如：匆匆的；粗略的
 
-4. **cloze** —— **把 sentence 原样复制，只把 target 替换成三个下划线 \`___\`**，
+4. **pos** —— 词性简写。
+   🔴 **按这个词在这句话里的实际用法判定，不是列出词典里的所有词性。**
+   avalanche 在「雪崩埋了那条路」里就是 n.，不要写成 n./vi./vt.
+   可用：n. / v. / a. / ad. / prep. / conj. / pron. / int. / num. / art.
+   （及物不及物不用分，一律 v.；形容词一律 a.，副词一律 ad.）
+   拿不准就给空字符串，别硬猜。
+
+5. **cloze** —— **把 sentence 原样复制，只把 target 替换成三个下划线 \`___\`**，
    其余一个字符都不要改（标点、大小写全部保留）。`;
 
 const SCHEMA = {
@@ -74,6 +104,7 @@ const SCHEMA = {
           target: { type: 'string' },
           lemma: { type: 'string' },
           definition: { type: 'string' },
+          pos: { type: 'string', description: '词性简写，按这句话里的用法；拿不准给空串' },
           sentence: { type: 'string', description: '挖空前的完整句子' },
           cloze: { type: 'string' },
           generated: { type: 'boolean', description: 'sentence 是否由你造出来的' },
@@ -83,6 +114,7 @@ const SCHEMA = {
           'target',
           'lemma',
           'definition',
+          'pos',
           'sentence',
           'cloze',
           'generated',
@@ -122,6 +154,8 @@ export async function draftFromInbox(inputs: ProcessInput[]): Promise<ProcessOut
     ],
   });
 
+  await record('process', response.usage);
+
   if (response.stop_reason === 'refusal') {
     throw new Error('Claude 拒绝了这次请求');
   }
@@ -131,4 +165,71 @@ export async function draftFromInbox(inputs: ProcessInput[]): Promise<ProcessOut
 
   const parsed = JSON.parse(text.text) as { items: ProcessOutput[] };
   return parsed.items;
+}
+
+const CONTRAST_SYSTEM = `你在帮一个**中文母语者**整理英语生词本的「对比词」。
+
+给你一个目标词，找出**他容易和它搞混**的英文词。三类：
+
+1. **拼写相近** —— altar / alter，desert / dessert
+2. **同音** —— their / there，bare / bear
+3. **发音容易混淆** —— 中文母语者常栽的那些（thin / sin，rice / lice，vest / west）
+
+硬性要求：
+
+- **必须是真实存在的英文词**，不许生造
+- **只能是常用词** —— 大致在雅思词汇范围内。生僻词、俚语、专有名词、缩写一律不要：
+  拿生僻词当对比词毫无意义，他根本不会把一个没见过的词和这个词搞混
+- **不要包含目标词本身**
+- **不要它的屈折变化**（brew / brewing / brewed 是同一个词，不构成混淆）
+- 最多 4 个
+- 🔴 **宁缺毋滥** —— 找不到像样的就**返回空数组**。凑数的对比词只会在复习时制造噪音。`;
+
+const CONTRAST_SCHEMA = {
+  type: 'object',
+  properties: {
+    words: {
+      type: 'array',
+      items: { type: 'string' },
+      description: '容易和目标词搞混的英文词，最多 4 个；没有就给空数组',
+    },
+  },
+  required: ['words'],
+  additionalProperties: false,
+} as const;
+
+/**
+ * 给一个词找形近/音近的对比词。
+ *
+ * `effort: 'low'` + `max_tokens: 500` —— 这是「给一个词找几个近似词」，
+ * 不是抽取整段文本，用整理那边的 medium/8000 是浪费。
+ *
+ * 按次计费，所以只在人点按钮时才发，不做自动补全。
+ */
+export async function suggestContrasts(lemma: string): Promise<string[]> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error('ANTHROPIC_API_KEY 未配置');
+
+  const client = new Anthropic({ apiKey });
+
+  const response = await client.messages.create({
+    model: MODEL,
+    max_tokens: 500,
+    system: CONTRAST_SYSTEM,
+    output_config: {
+      effort: 'low',
+      format: { type: 'json_schema', schema: CONTRAST_SCHEMA },
+    },
+    messages: [{ role: 'user', content: `目标词：${lemma}` }],
+  });
+
+  await record('contrast', response.usage);
+
+  if (response.stop_reason === 'refusal') throw new Error('Claude 拒绝了这次请求');
+
+  const text = response.content.find((b) => b.type === 'text');
+  if (!text || text.type !== 'text') throw new Error('Claude 没有返回文本内容');
+
+  const parsed = JSON.parse(text.text) as { words?: unknown };
+  return Array.isArray(parsed.words) ? parsed.words.filter((w): w is string => typeof w === 'string') : [];
 }
