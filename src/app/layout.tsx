@@ -25,6 +25,18 @@ export const metadata: Metadata = {
   description: "个人英语单词记录与复习",
   // iPhone「添加到主屏」后以独立 App 形式全屏运行，没有 Safari 的地址栏
   appleWebApp: { capable: true, title: "vocab", statusBarStyle: "black-translucent" },
+  other: {
+    /*
+     * 🔴 手写这一条，因为上面的 `appleWebApp.capable` **发不出它**。
+     *
+     * Next 16 把 capable 渲染成 `<meta name="mobile-web-app-capable">`（Chrome
+     * 推的标准名），而 WebKit 至今只认带 `apple-` 前缀的那个 —— 两个名字都要有。
+     *
+     * iOS 15.4+ 其实读 manifest 的 `display: standalone` 也能全屏，所以新系统
+     * 上没有它也行；留着是给老系统兜底，代价是一行。
+     */
+    "apple-mobile-web-app-capable": "yes",
+  },
 };
 
 export const viewport: Viewport = {
