@@ -36,6 +36,7 @@ export function WordDetail({
   onContrastsChange,
   glosses,
   zipf,
+  showLemma = true,
 }: {
   wordId: number;
   lemma: string;
@@ -47,15 +48,26 @@ export function WordDetail({
   onContrastsChange: (next: string[]) => void;
   glosses: Record<string, string>;
   zipf: number | null;
+  /**
+   * 顶部那行「词 + 改词」要不要显示。默认要 —— 词汇页的卡片头部是折叠态，
+   * 展开后需要它。
+   *
+   * 快速过词传 false：那一屏的主角就是屏幕中央那个大字词，紧接着再来一行
+   * 同一个词只是重复。（改词在词汇页做。）
+   */
+  showLemma?: boolean;
 }) {
   const [notes, setNotes] = useState<Record<number, string | null>>({});
 
   return (
     <div className="space-y-4 text-sm">
       {/* 词本身放最前 —— 它是这张卡最主干的东西 */}
-      <LemmaRow wordId={wordId} lemma={lemma} />
-
-      <Separator />
+      {showLemma && (
+        <>
+          <LemmaRow wordId={wordId} lemma={lemma} />
+          <Separator />
+        </>
+      )}
 
       <div className="flex flex-wrap items-baseline gap-x-3 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
         <span>{category}</span>

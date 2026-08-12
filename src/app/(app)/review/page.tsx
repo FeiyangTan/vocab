@@ -7,8 +7,21 @@ import { cn } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
-/** 两种学习模式。队列**来源不同**，所以先选模式、再选分类，而不是每个分类挂两条链接 */
+/**
+ * 两种学习模式。队列**来源不同**，所以先选模式、再选分类，而不是每个分类挂两条链接。
+ *
+ * 🔴 **顺序即默认**：排第一的那个既显示在左边，也是不带 `?mode=` 时的落点
+ *（它的链接就是光秃秃的 `/review`）。所以调整顺序会同时改掉默认模式。
+ */
 const MODES = [
+  {
+    key: 'triage',
+    label: '快速过词',
+    hint: '看单词选认识/不认识，按词频过一遍',
+    empty: '这轮过完了',
+    unit: (n: number) => `剩 ${n} 个`,
+    href: (scope: string) => `/review/${scope}/triage`,
+  },
   {
     key: 'cloze',
     label: '挖空复习',
@@ -17,14 +30,6 @@ const MODES = [
     empty: '没有到期的',
     unit: (n: number) => `${n} 张到期`,
     href: (scope: string) => `/review/${scope}`,
-  },
-  {
-    key: 'triage',
-    label: '快速过词',
-    hint: '看单词选认识/不认识，按词频过一遍',
-    empty: '这轮过完了',
-    unit: (n: number) => `剩 ${n} 个`,
-    href: (scope: string) => `/review/${scope}/triage`,
   },
 ] as const;
 

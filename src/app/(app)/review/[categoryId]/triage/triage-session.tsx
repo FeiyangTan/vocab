@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { speak } from '@/lib/speak';
 import { cn } from '@/lib/utils';
+import { WordDetail, type Encounter } from '../../../words/word-detail';
 
 /** 音标开关存这儿。设置就该记住 —— 每进一次都要重按一遍不叫设置 */
 const PHONETIC_KEY = 'vocab:triage:phonetic';
@@ -15,9 +16,12 @@ type Word = {
   id: number;
   lemma: string;
   phonetic: string | null;
-  note: string | null;
-  pos: string | null;
   remark: string | null;
+  contrasts: string[];
+  zipf: number | null;
+  category: string;
+  /** 同一个词的每一次遇到，各带各的释义和原句 */
+  encounters: Encounter[];
 };
 
 /**
@@ -26,8 +30,9 @@ type Word = {
  * 队列在服务端，这里**一次只拿一个词** —— 和挖空复习同一个道理，也顺带让
  * 「刷新不丢进度」成立：前端手里根本没有队列。
  *
- * 故意**不显示原句、对比词**：那些是挖空复习背面的东西，堆进来这个模式就不快了。
- * 释义也默认藏着 —— 这个模式的意义就是先自测，答案得自己要。
+ * 详情**默认藏着** —— 这个模式的意义就是先自测，答案得自己要。点开之后展示的
+ * 和词汇页展开后**完全一样**（复用 `WordDetail`），包括原句和对比词：
+ * 判断「认不认识」经常要靠原句才想得起来，看不到就只能靠猜。
  */
 export function TriageSession({
   scope,
@@ -41,6 +46,8 @@ export function TriageSession({
   pushBack: number;
 }) {
   const [word, setWord] = useState<Word | null>(null);
+  /** 对比词 → 音标+中文，跟词一起从接口拿（表在服务端） */
+  const [glosses, setGlosses] = useState<Record<string, string>>({});
   const [remaining, setRemaining] = useState(0);
   const [roundOver, setRoundOver] = useState(false);
   const [revealed, setRevealed] = useState(false);
@@ -54,7 +61,7 @@ export function TriageSession({
   /*
    * 要不要显示音标。**默认开**（就是原来的样子）。
    *
-   * 这个模式里音标是和单词一起摆在眼前的，不像释义那样藏在「看释义」后面 ——
+   * 这个模式里音标是和单词一起摆在眼前的，不像详情那样藏在「看详情」后面 ——
    * 想连读音一起自测（看着拼写自己念，再点单词听对不对）就关掉它。
    *
    * 初值给 true 而不是直接读 localStorage：服务端渲染时没有 localStorage，
@@ -81,6 +88,7 @@ export function TriageSession({
       const response = await fetch(`/api/triage?category=${scope}`);
       const data = (await response.json().catch(() => ({}))) as {
         word?: Word | null;
+        glosses?: Record<string, string>;
         remaining?: number;
         roundOver?: boolean;
         error?: string;
@@ -92,6 +100,7 @@ export function TriageSession({
       }
       const next = data.word ?? null;
       setWord(next);
+      setGlosses(data.glosses ?? {});
       setRemaining(data.remaining ?? 0);
       setRoundOver(Boolean(data.roundOver));
       setStuck(previousId !== undefined && next?.id === previousId);
@@ -159,7 +168,7 @@ export function TriageSession({
     return () => clearTimeout(timer);
   }, [armed]);
 
-  // 键盘：空格看释义，1 不认识、2 认识。**删除没有快捷键** —— 不可逆的事不该一按就发生
+  // 键盘：空格看详情，1 不认识、2 认识。**删除没有快捷键** —— 不可逆的事不该一按就发生
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (!word) return;
@@ -249,15 +258,28 @@ export function TriageSession({
             </div>
 
             {revealed ? (
+              /*
+               * 复用词汇页展开后的那个组件，**内容一模一样**：分类 + 词频、每条
+               * encounter 的释义和高亮原句、对比词、备注。不另写一份 ——
+               * 两处显示同一张卡，各写各的迟早对不上。
+               *
+               * `showLemma={false}`：词已经在上面大字摆着了。
+               */
               <div className="space-y-4">
                 <Separator />
-                <p className="text-center text-base">
-                  {word.pos && <span className="mr-1 text-muted-foreground">{word.pos}</span>}
-                  {word.note ?? <span className="text-muted-foreground">（没有释义）</span>}
-                </p>
-                {word.remark && (
-                  <p className="text-center text-sm text-muted-foreground">{word.remark}</p>
-                )}
+                <WordDetail
+                  wordId={word.id}
+                  lemma={word.lemma}
+                  category={word.category}
+                  zipf={word.zipf}
+                  encounters={word.encounters}
+                  contrasts={word.contrasts}
+                  onContrastsChange={(next) => setWord({ ...word, contrasts: next })}
+                  glosses={glosses}
+                  remark={word.remark}
+                  onRemarkChange={(next) => setWord({ ...word, remark: next })}
+                  showLemma={false}
+                />
               </div>
             ) : (
               <Button
@@ -265,7 +287,7 @@ export function TriageSession({
                 className="mx-auto h-auto px-6 py-2.5 font-normal"
                 onClick={() => setRevealed(true)}
               >
-                看释义 <span className="ml-1 text-xs opacity-50">空格</span>
+                看详情 <span className="ml-1 text-xs opacity-50">空格</span>
               </Button>
             )}
 

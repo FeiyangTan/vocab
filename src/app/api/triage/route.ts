@@ -1,8 +1,9 @@
 import { and, asc, eq, isNotNull, sql, type SQL } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { getDb } from '@/db';
-import { categories, encounters, words } from '@/db/schema';
+import { cards, categories, encounters, words } from '@/db/schema';
 import { parseScope } from '@/lib/categories';
+import { contrastHintsFor } from '@/lib/dictionary';
 import { phoneticOf } from '@/lib/phonetics';
 import { stampUnqueued } from '@/lib/triage';
 
@@ -57,22 +58,38 @@ export async function GET(request: Request) {
       id: words.id,
       lemma: words.lemma,
       remark: words.remark,
-      // 释义挂在 encounter 上，取最近那次 —— 口径同词汇页
-      note: sql<string | null>`
-        (array_agg(${encounters.note} ORDER BY ${encounters.createdAt} DESC)
-         FILTER (WHERE ${encounters.note} IS NOT NULL))[1]
-      `,
-      pos: sql<string | null>`
-        (array_agg(${encounters.pos} ORDER BY ${encounters.createdAt} DESC)
-         FILTER (WHERE ${encounters.note} IS NOT NULL))[1]
-      `,
+      contrasts: words.contrasts,
+      zipf: words.zipf,
+      // 分类名：在「全部」范围里过词时，这是唯一能看出这个词从哪儿来的信息
+      category: categories.name,
     })
     .from(words)
-    .leftJoin(encounters, eq(encounters.wordId, words.id))
+    .innerJoin(categories, eq(categories.id, words.categoryId))
     .where(inQueue)
-    .groupBy(words.id)
     .orderBy(asc(words.triageOrder))
     .limit(1);
+
+  /*
+   * 「看详情」要展示的和词汇页展开后的**完全一样**，所以这里也按 encounter 逐条取
+   *（同一个词在不同语境下释义不同，各带各的原句），口径和 `/words` 那边一致。
+   *
+   * `clozeText` 不是拿来复习的 —— 是用来在原句里定位**当初挖掉的那一段**，
+   * 词在句子里常常是变形的（guard → guarded），拿 lemma 匹配找不到。
+   */
+  const detail = word
+    ? await db
+        .select({
+          id: encounters.id,
+          rawText: encounters.rawText,
+          note: encounters.note,
+          pos: encounters.pos,
+          clozeText: cards.clozeText,
+        })
+        .from(encounters)
+        .innerJoin(cards, eq(cards.encounterId, encounters.id))
+        .where(eq(encounters.wordId, word.id))
+        .orderBy(asc(encounters.createdAt))
+    : [];
 
   const [{ remaining }] = await db
     .select({ remaining: sql<number>`count(*)::int` })
@@ -80,8 +97,9 @@ export async function GET(request: Request) {
     .where(inQueue);
 
   return NextResponse.json({
-    // 音标在服务端查好 —— 那张 0.95MB 的表不进浏览器（同对比词中文的规矩）
-    word: word ? { ...word, phonetic: phoneticOf(word.lemma) } : null,
+    // 音标和对比词的中文都在服务端查好 —— 那两张表（0.95MB / 2.18MB）不进浏览器
+    word: word ? { ...word, phonetic: phoneticOf(word.lemma), encounters: detail } : null,
+    glosses: word ? contrastHintsFor(word.contrasts) : {},
     remaining,
     total: counts.total,
     /** 队列空了但范围内还有词 = 这一轮过完了（区别于「这个范围根本没有词」） */
