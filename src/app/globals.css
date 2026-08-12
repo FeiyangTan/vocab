@@ -139,6 +139,26 @@
   }
 }
 
+/*
+ * 快速过词：上一张卡飞走之后，下一张从**相反方向**顶进来 ——
+ * 上滑判「认识」，新词就从下方升上来，像一叠卡片被抽掉一张。
+ *
+ * 用 keyframes 而不是 transition：进场是一次性的播放，配合元素上的 key 重新挂载
+ * 就能重放。用 transition 的话得先渲染一帧偏移态再翻回 0，多一次 render 还容易错帧。
+ */
+@keyframes triage-enter-from-below {
+  from {
+    transform: translateY(28px);
+    opacity: 0;
+  }
+}
+@keyframes triage-enter-from-above {
+  from {
+    transform: translateY(-28px);
+    opacity: 0;
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

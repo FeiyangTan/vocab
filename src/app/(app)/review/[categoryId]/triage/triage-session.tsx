@@ -2,7 +2,7 @@
 
 import { ChevronLeft, Trash2, Volume2 } from 'lucide-react';
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { speak } from '@/lib/speak';
@@ -11,6 +11,11 @@ import { WordDetail, type Encounter } from '../../../words/word-detail';
 
 /** 音标开关存这儿。设置就该记住 —— 每进一次都要重按一遍不叫设置 */
 const PHONETIC_KEY = 'vocab:triage:phonetic';
+
+/** 滑多远算数。手机上一个拇指的自然行程大概这么多 */
+const SWIPE_THRESHOLD = 70;
+/** 超过这个位移就认定「这是一次滑动」，随后的 click 要挡掉（否则划过单词会顺带发音） */
+const SLOP = 8;
 
 type Word = {
   id: number;
@@ -80,6 +85,107 @@ export function TriageSession({
     });
   }
 
+  /*
+   * ---- 上下滑手势 ----
+   *
+   * 上滑 = 认识、下滑 = 不认识。**手机上的主路径**，底部按钮照旧保留。
+   * 删除故意没有手势：不可逆的事不该一划就发生（它现在要点两次）。
+   *
+   * 用 Pointer Events 不用 Touch Events —— 触摸和鼠标走同一套，桌面上也能拖，
+   * 顺带让我（Claude）在桌面浏览器里就能验。
+   */
+
+  /** 按下后的竖直位移。null = 没在拖 */
+  const [dragY, setDragY] = useState<number | null>(null);
+  /** 判定通过后卡片飞出的方向。null = 没在飞 */
+  const [flying, setFlying] = useState<'up' | 'down' | null>(null);
+  /*
+   * 换过几张牌。挂在卡片的 `key` 上：数字一变 React 就重新挂载这个元素，
+   * 进场的 keyframes 随之重放。
+   *
+   * 🔴 不能拿 `word.id` 当 key —— 只剩一个词时标「不认识」返回的还是它，
+   * id 没变，动画就不会重放，看起来像卡住了。
+   */
+  const [dealt, setDealt] = useState(0);
+  /**
+   * 上一张是往哪个方向走的，决定下一张从哪边进场。
+   * 用 ref 不用 state：它只在渲染时被读一次，进 state 会让 `load` 的依赖变脏。
+   */
+  const flew = useRef<'up' | 'down' | null>(null);
+  const startY = useRef(0);
+  /** 这一次交互是不是已经算「滑动」了。用来挡掉松手时那个 click */
+  const swiping = useRef(false);
+  /*
+   * 正在拖 —— 🔴 **必须是 ref，不能拿 `dragY !== null` 判断。**
+   *
+   * `dragY` 是渲染闭包里的值：pointerdown 之后 React 还没重渲染时到来的
+   * pointermove，看到的仍然是旧的 null，那一段位移就被整个丢掉。手指快速一甩
+   * （down 和头几个 move 落在同一帧）正好是这种情况，滑动会莫名其妙失灵。
+   * ref 是当场读当场写，没有这个时间差。
+   */
+  const dragging = useRef(false);
+
+  /*
+   * 🔴 **只在详情收起时接管手势。**
+   *
+   * 竖滑和页面滚动抢同一个动作。详情收起时这一屏根本不用滚，手势区给
+   * `touch-action: none` 让浏览器彻底不插手（也顺带挡掉 iOS 的下拉刷新）；
+   * 详情展开后内容变长、页面要能滚，这时就把手势关掉、用底部按钮。
+   *
+   * 每换一个词详情都会自动收起，所以绝大多数时间手势都是开着的。
+   */
+  const swipeEnabled = !revealed && !busy && !flying && word !== null;
+
+  function onPointerDown(e: React.PointerEvent) {
+    if (!swipeEnabled) return;
+    startY.current = e.clientY;
+    swiping.current = false;
+    dragging.current = true;
+    setDragY(0);
+    /*
+     * 捕获指针：手指划出这个元素也照样收得到事件。
+     *
+     * try 包着是因为 pointerId 不是"活跃指针"时它会抛 NotFoundError，
+     * 抛出来就把整个 handler 带崩、手势直接失灵。捕获失败顶多是划出边界丢事件，
+     * 不值得为它牺牲整个手势。
+     */
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // 忽略：没捕获到也能用，只是划出元素外会断
+    }
+  }
+
+  function onPointerMove(e: React.PointerEvent) {
+    if (!dragging.current) return;
+    const dy = e.clientY - startY.current;
+    if (Math.abs(dy) > SLOP) swiping.current = true;
+    setDragY(dy);
+  }
+
+  function onPointerUp(e: React.PointerEvent) {
+    if (!dragging.current) return;
+    dragging.current = false;
+    // 位移也当场从事件算，不读 state —— 同上，state 可能还没跟上最后一次 move
+    const dy = e.clientY - startY.current;
+    setDragY(null);
+    if (Math.abs(dy) < SWIPE_THRESHOLD) return; // 不够阈值，弹回原位
+
+    const direction = dy < 0 ? 'up' : 'down';
+    setFlying(direction);
+    // 不等飞出动画放完再发请求 —— 网络往返本来就要 200~350ms，
+    // 串起来会明显卡顿。动画和请求同时走，哪个先完都不影响结果。
+    void judge(direction === 'up' ? 'known' : 'unknown');
+  }
+
+  /** 松手时浏览器还会补一个 click，滑动的话要挡掉，不然会触发单词发音 */
+  function onClickCapture(e: React.MouseEvent) {
+    if (!swiping.current) return;
+    e.preventDefault();
+    e.stopPropagation();
+    swiping.current = false;
+  }
+
   const load = useCallback(
     async (previousId?: number) => {
       setLoading(true);
@@ -104,6 +210,9 @@ export function TriageSession({
       setRemaining(data.remaining ?? 0);
       setRoundOver(Boolean(data.roundOver));
       setStuck(previousId !== undefined && next?.id === previousId);
+      // 新词到位：收掉飞出状态，换一张牌（key 变 → 进场动画重放）
+      setFlying(null);
+      setDealt((n) => n + 1);
     },
     [scope],
   );
@@ -115,6 +224,8 @@ export function TriageSession({
   async function judge(action: 'known' | 'unknown') {
     if (!word || busy) return;
     const id = word.id;
+    // 进场方向跟着判定走，所以按钮、快捷键、手势三条路都有一样的动效
+    flew.current = action === 'known' ? 'up' : 'down';
     setBusy(true);
     const response = await fetch(`/api/triage/${id}`, {
       method: 'POST',
@@ -234,7 +345,56 @@ export function TriageSession({
         </div>
       ) : (
         <>
-          <div className="flex flex-1 flex-col justify-center gap-8">
+          {/*
+            手势区 = 整个中间区域，不是只有单词那几十像素 —— 手机上得能随手一划，
+            不能要求瞄准。`touch-action: none` **只在手势开着时**加：
+            详情展开后内容变长、页面要能滚，那时候得把控制权还给浏览器。
+          */}
+          <div
+            className={cn(
+              'relative flex flex-1 flex-col justify-center overflow-hidden',
+              swipeEnabled && 'touch-none select-none',
+            )}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerUp}
+            onClickCapture={onClickCapture}
+          >
+            {/* 上下两个提示。放在卡片**外面**，卡片跟手动它们不动 */}
+            <SwipeHint label="认识" side="up" dy={dragY} />
+            <SwipeHint label="不认识" side="down" dy={dragY} />
+
+            <div
+              key={dealt}
+              style={{
+                transform: flying
+                  ? `translateY(${flying === 'up' ? '-120vh' : '120vh'})`
+                  : dragY !== null
+                    ? // 跟手位移 + 轻微缩小，划得越远越"脱手"
+                      `translateY(${dragY}px) scale(${1 - Math.min(Math.abs(dragY), 240) / 2400})`
+                    : undefined,
+                opacity:
+                  flying !== null
+                    ? 0
+                    : dragY !== null
+                      ? 1 - Math.min(Math.abs(dragY), 300) / 600
+                      : undefined,
+                // 拖动中不能有 transition，否则跟不上手指
+                transition: dragY !== null ? 'none' : undefined,
+                animation:
+                  flying === null && flew.current
+                    ? `triage-enter-from-${flew.current === 'up' ? 'below' : 'above'} 180ms ease-out`
+                    : undefined,
+              }}
+              className={cn(
+                'flex flex-col justify-center gap-8',
+                // 飞出 180ms 直出；松手没过阈值时弹回，带一点回弹更像实物
+                flying
+                  ? 'transition-[transform,opacity] duration-[180ms] ease-out'
+                  : 'transition-[transform,opacity] duration-200 ease-[cubic-bezier(.2,1.3,.4,1)]',
+              )}
+            >
             {/* 词和音标绑在一起，音标贴着词 —— 和词汇页一致 */}
             <div className="flex flex-wrap items-baseline justify-center gap-x-2 gap-y-1">
               <button
@@ -296,6 +456,7 @@ export function TriageSession({
                 队列里只剩它了，标「不认识」还是它 —— 认识或删掉才能过完这一轮
               </p>
             )}
+            </div>
           </div>
 
           <div className="flex items-stretch gap-2 pt-10">
@@ -337,5 +498,52 @@ export function TriageSession({
         </>
       )}
     </main>
+  );
+}
+
+/**
+ * 滑动时浮在上/下方的提示，告诉你（jimmy）**松手会发生什么**。
+ *
+ * 只在往它那个方向划的时候出现：往上划只亮「认识」，往下划只亮「不认识」——
+ * 两个一起亮的话等于没提示。
+ *
+ * 过阈值就变实心高亮，这一下视觉跳变就是「松手即生效」的信号，
+ * 手机上没有 hover 可用，只能靠它。
+ */
+function SwipeHint({
+  label,
+  side,
+  dy,
+}: {
+  label: string;
+  side: 'up' | 'down';
+  /** 当前竖直位移，null = 没在拖 */
+  dy: number | null;
+}) {
+  const towards = dy !== null && (side === 'up' ? dy < 0 : dy > 0);
+  const distance = towards ? Math.abs(dy) : 0;
+  const past = distance >= SWIPE_THRESHOLD;
+
+  return (
+    <div
+      aria-hidden
+      className={cn(
+        'pointer-events-none absolute inset-x-0 flex justify-center transition-opacity duration-100',
+        side === 'up' ? 'top-0' : 'bottom-0',
+      )}
+      // 划到阈值时刚好全亮，之前按比例渐显
+      style={{ opacity: Math.min(distance / SWIPE_THRESHOLD, 1) }}
+    >
+      <span
+        className={cn(
+          'rounded-full border px-4 py-1 text-sm transition-colors',
+          past
+            ? 'border-primary bg-primary text-primary-foreground'
+            : 'border-border text-muted-foreground',
+        )}
+      >
+        {label}
+      </span>
+    </div>
   );
 }
