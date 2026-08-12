@@ -66,7 +66,9 @@ export function ContrastEditor({
         衬线斜体 + 墨绿下划线比方块 chip 更贴纸质风。
       */}
       {value.map((word) => (
-        <span key={word} className="inline-flex items-center gap-0.5">
+        /* `flex-wrap` + `min-w-0`：展开释义后这个 chip 可能比一行还宽，
+           得允许它在内部折行，否则窄屏上整页会被撑出横向滚动条 */
+        <span key={word} className="inline-flex min-w-0 flex-wrap items-center gap-0.5">
           {/*
             词本身就是发音按钮 —— 旁边再挂个喇叭图标是多余的一次视觉噪音。
             hover 显示中文用 Tooltip 不用原生 `title`：后者要静止 1–2 秒才弹，
@@ -122,13 +124,33 @@ export function ContrastEditor({
   );
 }
 
-/** 一个对比词 chip：点字发音，有中文时 hover 弹出来 */
+/**
+ * 一个对比词 chip：**点一下 = 发音 + 就地展开音标和中文**，再点收起。
+ *
+ * 🔴 为什么不是「点击改成看释义」：点击原本就是发音，那不能丢 —— 对比词很多是
+ * **读音**相近才容易混（crispy / crisis），光看拼写体会不出来。所以两件事一起做。
+ *
+ * 🔴 为什么展开在行内而不是弹气泡：手机上 Radix 的 `Tooltip` 设计上就不响应触摸，
+ * 换 `Popover` 又要处理定位、层级、点外面关闭，而且快速过词那个手势容器是
+ * `overflow-hidden`，浮层容易被截。行内不依赖任何这些，各端行为完全一致。
+ * 代价是那一行会重排，可以接受。
+ *
+ * 桌面的 hover 气泡照旧保留 —— 悬停比点击更省事。**但展开之后就不再弹**，
+ * 否则同一句话在屏幕上出现两遍。
+ */
 function ChipButton({ word, gloss }: { word: string; gloss?: string }) {
+  const [open, setOpen] = useState(false);
+
   const button = (
     <button
       type="button"
-      onClick={() => speak(word)}
-      aria-label={`朗读 ${word}`}
+      onClick={() => {
+        speak(word);
+        // 查不到中文的词只发音，不留一个点了没反应的展开态
+        if (gloss) setOpen((v) => !v);
+      }}
+      aria-label={gloss ? `朗读 ${word}，并${open ? '收起' : '展开'}释义` : `朗读 ${word}`}
+      aria-expanded={gloss ? open : undefined}
       className="font-serif text-[15px] italic text-primary underline decoration-border underline-offset-4 transition-colors hover:decoration-primary"
     >
       {word}
@@ -139,11 +161,23 @@ function ChipButton({ word, gloss }: { word: string; gloss?: string }) {
   if (!gloss) return button;
 
   return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>{button}</TooltipTrigger>
-        <TooltipContent>{gloss}</TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <>
+      {open ? (
+        button
+      ) : (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>{button}</TooltipTrigger>
+            <TooltipContent>{gloss}</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
+      {open && (
+        /* 弱化样式：它是注解，别和斜体的词本身抢。
+           **不加 `whitespace-nowrap`** —— 释义能有二三十个字符
+           （`/ˈkraɪsɪs/ n. 危机, 危险期, 决定性时刻`），窄屏上不让它折行就会横向溢出 */
+        <span className="min-w-0 text-xs text-muted-foreground">{gloss}</span>
+      )}
+    </>
   );
 }
