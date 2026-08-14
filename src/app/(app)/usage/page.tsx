@@ -1,7 +1,8 @@
 import { desc, sql } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { apiUsage } from '@/db/schema';
-import { getAllModels, PURPOSE_LABEL } from '@/lib/models';
+import { getAllModels } from '@/db/settings';
+import { PURPOSE_LABEL } from '@/lib/models';
 import { estimateCost, formatUsd } from '@/lib/pricing';
 import { ModelPicker } from './model-picker';
 

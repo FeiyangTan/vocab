@@ -1,6 +1,3 @@
-import { eq } from 'drizzle-orm';
-import { getDb } from '@/db';
-import { settings } from '@/db/schema';
 import { PRICES } from './pricing';
 
 /**
@@ -8,6 +5,11 @@ import { PRICES } from './pricing';
  *
  * 放在用量页是因为那一页本来就**按模型分组显示花费估算**：在花费旁边挑模型，
  * 改完下一次调用就记在新模型名下，贵了还是便宜了一眼能对比。
+ *
+ * 🔴 **这个文件必须保持「客户端安全」** —— 名单和校验函数被 `/usage` 页那个
+ * `'use client'` 的选择器直接 import。一旦在这儿 import `@/db`，drizzle 和
+ * Neon 驱动就会被打进浏览器包（实测会让 Vercel 构建直接失败）。
+ * 读写库的部分在 `src/db/settings.ts`。
  */
 
 /** 两条会调 Claude 的路径 */
@@ -83,48 +85,4 @@ export function isValidModel(value: unknown): value is ModelId {
 
 export function isValidPurpose(value: unknown): value is Purpose {
   return PURPOSES.some((p) => p === value);
-}
-
-const keyOf = (purpose: Purpose) => `model.${purpose}`;
-
-/**
- * 取某条路径当前用的模型。
- *
- * 🔴 **查不到、或者库里的值不在白名单里，一律退回默认** —— 设置表被写脏
- * （手工改库、白名单缩了）不该让 AI 调用挂掉。
- *
- * **不做缓存**：每次调用前多一次约 50ms 的查询，而 AI 调用本身要几秒，
- * 这点开销无所谓；加了缓存就会出现「刚在页面上改完但没生效」这种最难解释的 bug。
- */
-export async function getModel(purpose: Purpose): Promise<ModelId> {
-  try {
-    const [row] = await getDb()
-      .select({ value: settings.value })
-      .from(settings)
-      .where(eq(settings.key, keyOf(purpose)))
-      .limit(1);
-    return isValidModel(row?.value) ? row.value : DEFAULT_MODEL[purpose];
-  } catch (error) {
-    // 表还没建（迁移没跑）之类 —— 照样能用默认值跑起来
-    console.error('[models] 读设置失败，用默认值:', error);
-    return DEFAULT_MODEL[purpose];
-  }
-}
-
-/** 一次把两条路径的当前模型都取回来，给 `/usage` 页渲染用 */
-export async function getAllModels(): Promise<Record<Purpose, ModelId>> {
-  const entries = await Promise.all(
-    PURPOSES.map(async (p) => [p, await getModel(p)] as const),
-  );
-  return Object.fromEntries(entries) as Record<Purpose, ModelId>;
-}
-
-export async function setModel(purpose: Purpose, model: ModelId): Promise<void> {
-  await getDb()
-    .insert(settings)
-    .values({ key: keyOf(purpose), value: model })
-    .onConflictDoUpdate({
-      target: settings.key,
-      set: { value: model, updatedAt: new Date() },
-    });
 }

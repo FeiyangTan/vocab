@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { isValidModel, isValidPurpose, setModel } from '@/lib/models';
+import { setModel } from '@/db/settings';
+import { isValidModel, isValidPurpose } from '@/lib/models';
 
 /**
  * 改某条 AI 路径用的模型。`PUT /api/settings/models` body `{ purpose, model }`

@@ -1,7 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { getDb } from '@/db';
 import { apiUsage, type Draft } from '@/db/schema';
-import { getModel, supportsEffort } from './models';
+import { getModel } from '@/db/settings';
+import { supportsEffort } from './models';
 
 /**
  * 整理阶段：把 inbox 里的原始文本拆成能做成复习卡的五个字段。
