@@ -260,3 +260,19 @@ export const apiUsage = pgTable(
   },
   (t) => [index('api_usage_created_at_idx').on(t.createdAt)],
 );
+
+/**
+ * 全局设置。KV 表，现在只有两行：`model.process` 和 `model.contrast`
+ *（两条 AI 路径各用哪个模型，在 `/usage` 页上选，见 `src/lib/models.ts`）。
+ *
+ * 做成 KV 而不是「一个用途一列」：加第三条 AI 路径、或者以后想把界面上那几个
+ * 开关做成跨设备同步，都不用再动 schema。
+ *
+ * 🔴 **迁移里不插默认行**，默认值写在代码里兜底。这样新环境、或者迁移没跑全，
+ * AI 调用也不会因为查不到设置而挂掉 —— 一个设置项不该有能力弄挂主流程。
+ */
+export const settings = pgTable('settings', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});

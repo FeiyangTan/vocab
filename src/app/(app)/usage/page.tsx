@@ -1,14 +1,15 @@
-import { asc, desc, sql } from 'drizzle-orm';
+import { desc, sql } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { apiUsage } from '@/db/schema';
+import { getAllModels, PURPOSE_LABEL } from '@/lib/models';
 import { estimateCost, formatUsd } from '@/lib/pricing';
+import { ModelPicker } from './model-picker';
 
 export const dynamic = 'force-dynamic';
 
-const PURPOSE_LABEL: Record<string, string> = {
-  process: '整理草稿',
-  contrast: '对比词匹配',
-};
+/** 用途的中文名和 `src/lib/models.ts` 共用一份 —— 两处各写一份迟早对不上 */
+const labelOf = (purpose: string) =>
+  (PURPOSE_LABEL as Record<string, string>)[purpose] ?? purpose;
 
 /**
  * Claude API 用量 + 花费估算。
@@ -23,6 +24,7 @@ const PURPOSE_LABEL: Record<string, string> = {
  */
 export default async function UsagePage() {
   const db = getDb();
+  const models = await getAllModels();
 
   const sums = {
     input: sql<number>`coalesce(sum(${apiUsage.inputTokens}), 0)::int`,
@@ -79,6 +81,14 @@ export default async function UsagePage() {
         )}
       </div>
 
+      {/*
+        模型选择放最前，而且**在「还没有记录」的分支外面** —— 它是设置不是统计，
+        一次都没调用过的时候更应该能先把模型定下来。
+      */}
+      <div className="mb-8">
+        <ModelPicker current={models} />
+      </div>
+
       {total.calls === 0 ? (
         <p className="py-16 text-center text-sm text-muted-foreground">
           还没有记录。下次用「AI 处理」或「AI 匹配对比词」时就会记上。
@@ -120,7 +130,7 @@ export default async function UsagePage() {
               </div>
               {byPurpose.map((row) => (
                 <div key={row.purpose} className="flex justify-between gap-3 py-1 text-sm">
-                  <span>{PURPOSE_LABEL[row.purpose] ?? row.purpose}</span>
+                  <span>{labelOf(row.purpose)}</span>
                   <span className="text-muted-foreground tabular-nums">
                     输入 {n(row.input)} · 输出 {n(row.output)} · {n(row.calls)} 次
                   </span>

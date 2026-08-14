@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { getDb } from '@/db';
 import { apiUsage, type Draft } from '@/db/schema';
+import { getModel, supportsEffort } from './models';
 
 /**
  * 整理阶段：把 inbox 里的原始文本拆成能做成复习卡的五个字段。
@@ -10,20 +11,22 @@ import { apiUsage, type Draft } from '@/db/schema';
  * 所以这里只出建议，由审核页做最终决定。
  */
 
-const MODEL = 'claude-opus-5';
-
 /**
  * 把这次调用的 token 数记下来，供 `/usage` 页面统计。
  *
  * 🔴 **记录失败绝不能影响主流程** —— 整理明明成功了，却因为写用量表出错而整体
  * 报错，是本末倒置。所以整段吞掉异常，只在服务端日志里留一条。
+ *
+ * 🔴 **`model` 必须由调用方传进来，不能在这里写死。** 两条路径现在各用各的模型
+ *（在 `/usage` 页上选，见 `src/lib/models.ts`），写死的话所有调用都会记到同一个
+ * 模型名下，那一页按模型分组的花费估算就是错的 —— 而那正是设置这个功能要看的东西。
  */
-async function record(purpose: string, usage: Anthropic.Usage | undefined) {
+async function record(purpose: string, model: string, usage: Anthropic.Usage | undefined) {
   if (!usage) return;
   try {
     await getDb().insert(apiUsage).values({
       purpose,
-      model: MODEL,
+      model,
       inputTokens: usage.input_tokens ?? 0,
       outputTokens: usage.output_tokens ?? 0,
       cacheReadTokens: usage.cache_read_input_tokens ?? 0,
@@ -137,13 +140,18 @@ export async function draftFromInbox(inputs: ProcessInput[]): Promise<ProcessOut
 
   const payload = inputs.map((i) => ({ id: i.id, source: i.source, raw_text: i.rawText }));
 
+  // 每次现查，不缓存 —— 在 /usage 页上改完设置，下一次处理就该用新模型
+  const model = await getModel('process');
+
   const response = await client.messages.create({
-    model: MODEL,
+    model,
     max_tokens: 8000,
     system: SYSTEM,
-    // 简单抽取任务，不需要默认的 high
     output_config: {
-      effort: 'medium',
+      // 简单抽取任务，不需要默认的 high。
+      // 🔴 **按模型条件下发** —— 不支持 effort 的模型（Haiku 4.5）传了会直接 400，
+      // 整个调用失败，不是悄悄忽略。
+      ...(supportsEffort(model) ? { effort: 'medium' as const } : {}),
       format: { type: 'json_schema', schema: SCHEMA },
     },
     messages: [
@@ -154,7 +162,7 @@ export async function draftFromInbox(inputs: ProcessInput[]): Promise<ProcessOut
     ],
   });
 
-  await record('process', response.usage);
+  await record('process', model, response.usage);
 
   if (response.stop_reason === 'refusal') {
     throw new Error('Claude 拒绝了这次请求');
@@ -212,18 +220,21 @@ export async function suggestContrasts(lemma: string): Promise<string[]> {
 
   const client = new Anthropic({ apiKey });
 
+  const model = await getModel('contrast');
+
   const response = await client.messages.create({
-    model: MODEL,
+    model,
     max_tokens: 500,
     system: CONTRAST_SYSTEM,
     output_config: {
-      effort: 'low',
+      // 同上：不支持 effort 的模型不能传，会 400
+      ...(supportsEffort(model) ? { effort: 'low' as const } : {}),
       format: { type: 'json_schema', schema: CONTRAST_SCHEMA },
     },
     messages: [{ role: 'user', content: `目标词：${lemma}` }],
   });
 
-  await record('contrast', response.usage);
+  await record('contrast', model, response.usage);
 
   if (response.stop_reason === 'refusal') throw new Error('Claude 拒绝了这次请求');
 

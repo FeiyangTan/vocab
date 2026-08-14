@@ -99,6 +99,13 @@
       "when": 1786132646888,
       "tag": "0013_words_triage",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1786738984131,
+      "tag": "0014_settings",
+      "breakpoints": true
     }
   ]
 }
