@@ -1,10 +1,11 @@
 import { desc, sql } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { apiUsage } from '@/db/schema';
-import { getAllModels } from '@/db/settings';
+import { getAllModels, getAllPrompts } from '@/db/settings';
 import { PURPOSE_LABEL } from '@/lib/models';
 import { estimateCost, formatUsd } from '@/lib/pricing';
 import { ModelPicker } from './model-picker';
+import { PromptEditor } from './prompt-editor';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,7 +26,7 @@ const labelOf = (purpose: string) =>
  */
 export default async function UsagePage() {
   const db = getDb();
-  const models = await getAllModels();
+  const [models, prompts] = await Promise.all([getAllModels(), getAllPrompts()]);
 
   const sums = {
     input: sql<number>`coalesce(sum(${apiUsage.inputTokens}), 0)::int`,
@@ -83,11 +84,14 @@ export default async function UsagePage() {
       </div>
 
       {/*
-        模型选择放最前，而且**在「还没有记录」的分支外面** —— 它是设置不是统计，
-        一次都没调用过的时候更应该能先把模型定下来。
+        模型和提示词放最前，而且**在「还没有记录」的分支外面** —— 它们是设置不是
+        统计，一次都没调用过的时候更应该能先把模型和提示词定下来。
+
+        顺序是「用哪个模型 → 发什么指令 → 花了多少」：前两个是因，第三个是果。
       */}
-      <div className="mb-8">
+      <div className="mb-8 space-y-8">
         <ModelPicker current={models} />
+        <PromptEditor current={prompts} />
       </div>
 
       {total.calls === 0 ? (
