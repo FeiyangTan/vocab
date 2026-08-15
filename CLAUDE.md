@@ -32,6 +32,32 @@ jimmy is learning English, and his messages are practice. **Finish each reply wi
 - Keep it tight — a few lines. It is a footnote to the real answer, never the main event.
 - Never soften a real error, and never invent one to have something to say.
 
+# Code and commits are written in English
+
+**Commit messages and code comments are English**, following the repo's existing
+`feat:` / `fix:` / `chore:` / `docs:` convention and its habit of a body that explains
+*why*, not what.
+
+The existing 31 commits before this rule are in Chinese and **stay that way** — that was a
+decision, not an oversight. Rewriting them changes every SHA, needs a force-push, and
+detaches Vercel's deployment list from the repo. Do not offer to "fix" them.
+
+🔴 **Some Chinese is load-bearing and must never be translated:**
+
+- `src/lib/prompts.ts` — `PROCESS_SYSTEM`, `CONTRAST_SYSTEM`, `buildUserMessage`, and the
+  schema `description` fields. This is what is *sent to the model*; it is what makes
+  definitions come back in Chinese. Translate it and the app becomes a different product.
+- `scripts/backfill-pos.mjs` — its `SYSTEM` prompt and schema descriptions, same reason.
+- `src/lib/dictionary.ts` — the `/(人名|姓氏|地名|省名|城市|、如)/` regex. It matches
+  **ECDICT's own gloss text**; translating it silently disables the proper-noun filter.
+- `src/lib/dictionary-data.json` — ECDICT data.
+- Chinese quoted *as an example* inside an English comment (a sample gloss like
+  `/ˈɔltɚ/ v. 改变`). It is data being illustrated, not prose.
+- `AGENTS.md` — rewritten by `next dev`; editing it just recreates the diff.
+- Everything in the database: definitions, notes, category names.
+
+The comments *around* those things are English. Only the payload is frozen.
+
 # Browser testing must not disturb jimmy's own windows
 
 Browser tools are pre-authorized here — no need to ask each time. But **everything happens in
