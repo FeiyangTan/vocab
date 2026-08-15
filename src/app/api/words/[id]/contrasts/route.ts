@@ -6,10 +6,11 @@ import { cleanContrasts } from '@/lib/contrasts';
 import { contrastHintsFor } from '@/lib/dictionary';
 
 /**
- * 设置一个词的对比词。`PUT /api/words/{id}/contrasts` body `{ contrasts: string[] }`
+ * Set a word's confusables. `PUT /api/words/{id}/contrasts` body `{ contrasts: string[] }`
  *
- * **整组替换**而不是增量 add/remove —— 幂等，复习页和词汇页共用同一个接口，
- * 前端拿当前数组改完整个传回来即可，不用维护两套逻辑。
+ * A **whole-set replacement** rather than incremental add/remove — idempotent, shared by the
+ * review page and the words page, so the frontend edits the current array and sends all of it
+ * back, with no second code path to maintain.
  */
 
 export async function PUT(request: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -33,6 +34,7 @@ export async function PUT(request: Request, ctx: { params: Promise<{ id: string 
   if (updated.length === 0) {
     return NextResponse.json({ error: 'Word not found' }, { status: 404 });
   }
-  // 带上中文，前端新加的词立刻就有 tooltip，不用刷新
+  // Include the glosses so a newly added word has its tooltip immediately, without a
+  // refresh
   return NextResponse.json({ ok: true, contrasts, glosses: contrastHintsFor(contrasts) });
 }

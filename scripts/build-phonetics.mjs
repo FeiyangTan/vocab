@@ -1,17 +1,18 @@
 /**
- * 从 CMUdict 生成**美式**音标表 `src/lib/phonetics-data.json`。
+ * Build the **US** phonetics table `src/lib/phonetics-data.json` from CMUdict.
  *
  *   node scripts/build-phonetics.mjs
  *
- * 数据源：**CMU Pronouncing Dictionary**（卡内基梅隆，135,155 条，美式英语的
- * 标准免费来源），经 npm 包 `cmu-pronouncing-dictionary` 分发。
+ * Source: the **CMU Pronouncing Dictionary** (Carnegie Mellon, 135,155 entries, the standard
+ * free source for American English), distributed via the npm package
+ * `cmu-pronouncing-dictionary`.
  *
- * 🔴 **不用 ECDICT 的 `phonetic` 字段** —— 那是**英式**的，一眼可辨：
- * `car → kɑ:`、`better → 'betә` 都没有儿化的 r。虽然它覆盖率更高，
- * 但拿英式冒充美式是错的。
+ * 🔴 **ECDICT's `phonetic` field is not used** — it is **British**, recognisably so:
+ * `car → kɑ:` and `better → 'betә` both lack the rhotic r. Its coverage is better, but passing
+ * British off as American is simply wrong.
  *
- * CMUdict 给的是 ARPAbet 音素，这里转成 IPA。精简范围和中文查表一致
- *（SUBTLEX 里 Zipf ≥ 2.0），生成约 0.95MB。
+ * CMUdict gives ARPAbet phonemes, converted to IPA here. The reduction matches the Chinese
+ * lookup (Zipf ≥ 2.0 in SUBTLEX) and produces about 0.95MB.
  */
 import { createRequire } from 'node:module';
 import { writeFileSync } from 'node:fs';
@@ -22,7 +23,7 @@ const subtlex = require('subtlex-word-frequencies');
 
 const MIN_ZIPF = 2.0;
 
-/** ARPAbet 39 个音素 → IPA（美式） */
+/** The 39 ARPAbet phonemes → IPA (American) */
 const PHONEMES = {
   AA: 'ɑ', AE: 'æ', AH: 'ʌ', AO: 'ɔ', AW: 'aʊ', AY: 'aɪ',
   B: 'b', CH: 'tʃ', D: 'd', DH: 'ð',
@@ -34,11 +35,13 @@ const PHONEMES = {
 };
 
 /**
- * ARPAbet → IPA。两处不能想当然：
+ * ARPAbet → IPA. Two things you cannot assume:
  *
- * 1. **重音记号标在整个音节前，不是元音前。** 直接按音素输出会得到 `/wˈɔtɚ/`，
- *    正确的是 `/ˈwɔtɚ/` —— 得从元音往前回溯到辅音簇的开头。
- * 2. **弱读的 ER / AH 用 ɚ / ə**（`better` → `ˈbɛtɚ`），这是美式音标的标准写法。
+ * 1. **The stress mark goes before the whole syllable, not before the vowel.** Emitting
+ *    phoneme by phoneme yields `/wˈɔtɚ/`, where the correct form is `/ˈwɔtɚ/` — so it has to
+ *    walk back from the vowel to the start of the consonant cluster.
+ * 2. **Unstressed ER / AH become ɚ / ə** (`better` → `ˈbɛtɚ`), which is the standard American
+ *    notation.
  */
 function toIPA(arpabet) {
   const tokens = [];
@@ -51,7 +54,8 @@ function toIPA(arpabet) {
     tokens.push({ symbol, stress: m[2], vowel: m[2] !== undefined });
   }
 
-  // 每个重读元音，把记号插到它所在音节的开头（上一个元音之后的位置）
+  // For each stressed vowel, insert the mark at the start of its syllable (the position just
+  // after the previous vowel)
   const marks = new Map();
   let prevVowel = -1;
   for (let i = 0; i < tokens.length; i++) {
@@ -89,7 +93,7 @@ for (const word of Object.keys(dictionary)) {
 const json = JSON.stringify(out);
 writeFileSync('src/lib/phonetics-data.json', json);
 console.error(
-  `CMUdict ${Object.keys(dictionary).length.toLocaleString()} 条 → 保留 ` +
-    `${Object.keys(out).length.toLocaleString()} 条，` +
+  `CMUdict ${Object.keys(dictionary).length.toLocaleString()} entries → kept ` +
+    `${Object.keys(out).length.toLocaleString()}, ` +
     `${(Buffer.byteLength(json) / 1048576).toFixed(2)} MB → src/lib/phonetics-data.json`,
 );

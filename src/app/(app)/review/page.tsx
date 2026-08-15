@@ -8,10 +8,12 @@ import { cn } from '@/lib/utils';
 export const dynamic = 'force-dynamic';
 
 /**
- * 两种学习模式。队列**来源不同**，所以先选模式、再选分类，而不是每个分类挂两条链接。
+ * The two study modes. Their queues come from **different sources**, which is why you pick the
+ * mode first and the category second, rather than hanging two links off every category.
  *
- * 🔴 **顺序即默认**：排第一的那个既显示在左边，也是不带 `?mode=` 时的落点
- *（它的链接就是光秃秃的 `/review`）。所以调整顺序会同时改掉默认模式。
+ * 🔴 **Order is the default**: whichever comes first is both shown on the left and where a
+ * bare `?mode=`-less visit lands (its link is the plain `/review`). So reordering this array
+ * also changes the default mode.
  */
 const MODES = [
   {
@@ -26,7 +28,7 @@ const MODES = [
     key: 'cloze',
     label: 'Cloze',
     hint: 'Guess the word from a blanked sentence — scheduled by SM-2',
-    /** 空队列时的说法 —— 「没有到期的」和「过完了」不是一回事 */
+    /** What an empty queue says — "nothing due" and "round finished" are different things */
     empty: 'Nothing due',
     unit: (n: number) => `${n} due`,
     href: (scope: string) => `/review/${scope}`,
@@ -36,10 +38,11 @@ const MODES = [
 type Mode = (typeof MODES)[number];
 
 /**
- * 复习入口。**上面选模式，下面选分类。**
+ * The review entry point. **Mode on top, category below.**
  *
- * 模式走 URL（`?mode=triage`）不走客户端 state：前进/后退能用、刷新不丢、
- * 链接可以存 —— 和词汇页的分类筛选同一条规矩。
+ * The mode lives in the URL (`?mode=triage`) rather than client state: back/forward work,
+ * refresh doesn't lose it, and a link can be saved — the same rule as the words page's
+ * category filter.
  */
 export default async function ReviewPage({
   searchParams,
@@ -47,26 +50,29 @@ export default async function ReviewPage({
   searchParams: Promise<{ mode?: string }>;
 }) {
   const wanted = (await searchParams).mode;
-  // 参数过期/乱填一律落回第一个模式，不该让整页打不开
+  // A stale or bogus parameter falls back to the first mode — it shouldn't make the whole
+  // page unopenable
   const mode = MODES.find((m) => m.key === wanted) ?? MODES[0];
 
-  // 从 categories 出发做左连接：没有到期卡的分类也要出现在列表里（置灰），
-  // 从 cards 出发 groupBy 的话它们会整行消失。
+  // Left-join outward from categories: a category with no due cards still has to appear in
+  // the list (greyed out). Grouping outward from cards would drop its row entirely.
   const rows = await getDb()
     .select({
       id: categories.id,
       name: categories.name,
       cloze: sql<number>`count(${cards.id})::int`,
       /*
-       * 快速过词的队列长度。**必须 distinct** —— 上面为了数到期卡连了
-       * encounters，一个词有几条 encounter 就会被数几遍。
+       * The Quick pass queue length. **distinct is required** — counting due cards above joins
+       * encounters, so a word gets counted once per encounter it has.
        *
-       * 不用管词有没有排过位置：还没排的进去就会被排上（见 `stampUnqueued`），
-       * 所以这个数天然等于点进去看到的剩余数。也因此它**可以跨分类相加**，
-       * 「全部」那一行直接把各分类的加起来。
+       * Whether a word has a queue position doesn't matter: anything unstamped gets stamped on
+       * entry (see `stampUnqueued`), so this number naturally equals the remaining count you
+       * see after tapping in. That is also why it **sums across categories**, letting the
+       * "All" row simply add them up.
        */
       triage: sql<number>`count(distinct ${words.id}) FILTER (WHERE NOT ${words.triageDone})::int`,
-      /** 分类里一共多少词。用来把「这轮过完了」和「这个分类根本没词」分开 */
+      /** How many words the category holds in total. Used to tell "this round is finished"
+       *  apart from "this category has no words at all" */
       total: sql<number>`count(distinct ${words.id})::int`,
     })
     .from(categories)
@@ -76,7 +82,8 @@ export default async function ReviewPage({
     .groupBy(categories.id)
     .orderBy(asc(categories.sortOrder), asc(categories.id));
 
-  // 每个词只属于一个分类、每张卡只属于一个词，所以直接相加不会重复计数
+  // Each word belongs to one category and each card to one word, so summing double-counts
+  // nothing
   const sum = (pick: (r: (typeof rows)[number]) => number) =>
     rows.reduce((acc, r) => acc + pick(r), 0);
   const all = {
@@ -91,7 +98,7 @@ export default async function ReviewPage({
     <main className="mx-auto w-full max-w-2xl p-4 md:p-8">
       <h1 className="mb-5 font-serif text-2xl font-medium tracking-tight">Review</h1>
 
-      {/* 先选模式 —— 两种学习方式，不是同一个队列的两个视图 */}
+      {/* Mode first — two ways of studying, not two views of one queue */}
       <div className="flex flex-wrap items-baseline gap-x-5 gap-y-2 border-b border-border pb-3">
         {MODES.map((m) => (
           <Link
@@ -116,9 +123,9 @@ export default async function ReviewPage({
           No categories yet — create one under <Link href="/categories" className="mx-1 underline">Categories</Link>
         </p>
       ) : (
-        /* 再选分类。纸质风：靠发丝线分隔，不用盒子 */
+        /* Then the category. The paper look: separated by hairlines, not boxes */
         <div className="mt-4">
-          {/* 「全部」放最前 —— 它是所有分类的并集，不是并列的一项 */}
+          {/* "All" comes first — it's the union of every category, not a peer of them */}
           <ScopeRow scope="all" row={all} mode={mode} />
           {rows.map((r) => (
             <ScopeRow key={r.id} scope={String(r.id)} row={r} mode={mode} />
@@ -129,20 +136,21 @@ export default async function ReviewPage({
   );
 }
 
-/** 一个范围（某个分类，或「全部」）在当前模式下的入口。 */
+/** One scope (a category, or "All") as an entry point in the current mode. */
 function ScopeRow({
   scope,
   row,
   mode,
 }: {
-  /** 分类 id 或 `'all'`，直接拼进链接 */
+  /** A category id or `'all'`, interpolated straight into the link */
   scope: string;
   row: { name: string; cloze: number; triage: number; total: number };
   mode: Mode;
 }) {
   const count = mode.key === 'cloze' ? row.cloze : row.triage;
-  // 队列空但范围里有词，在快速过词下意味着「这轮过完了」—— **照样能点进去**按
-  // 「再来一轮」。挖空复习没有这回事，到期为 0 就是没得复习，置灰。
+  // An empty queue over a non-empty scope means "this round is finished" in Quick pass —
+  // and it **stays tappable** so you can press New round. Cloze review has no such state:
+  // zero due simply means nothing to review, so it greys out.
   const revivable = mode.key === 'triage' && row.total > 0;
   const disabled = count === 0 && !revivable;
 

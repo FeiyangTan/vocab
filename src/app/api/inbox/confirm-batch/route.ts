@@ -8,22 +8,25 @@ import { zipfOf } from '@/lib/frequency';
 import { cleanRemark } from '@/lib/remark';
 
 /**
- * 批量确认。`POST /api/inbox/confirm-batch`
+ * Bulk confirm. `POST /api/inbox/confirm-batch`
  *
- * 逐条调 `/api/inbox/{id}/confirm` 时每条是一个事务、9 个来回；数据库在 us-west-2，
- * 每个来回约 50 ms，135 条要两分钟。这里把整批做成**一个事务、约 10 个来回**，
- * 次数和条数无关。
+ * Calling `/api/inbox/{id}/confirm` one item at a time means one transaction and 9 round
+ * trips each; the database is in us-west-2 at ~50 ms per round trip, so 135 items take two
+ * minutes. This does the whole batch in **one transaction and about 10 round trips**,
+ * independent of item count.
  *
- * 🔴 **不依赖 `RETURNING` 的顺序。** 多行 `INSERT … RETURNING` 不保证返回顺序等于
- * VALUES 顺序，猜错就是卡片配错原句 —— 静默的数据错乱，只有复习时才看得出来。
- * 所以：word 靠 `lemma` 对回去（`(lemma, category_id)` 有唯一索引），
- * encounter **先从序列批量取号**再用显式 id 插。
+ * 🔴 **Never rely on `RETURNING` order.** A multi-row `INSERT … RETURNING` does not guarantee
+ * the returned order matches the VALUES order, and guessing wrong pairs a card with the wrong
+ * sentence — silent data corruption you'd only discover during review. So: words are matched
+ * back by `lemma` (there's a unique index on `(lemma, category_id)`), and encounter ids are
+ * **drawn from the sequence in bulk first**, then inserted explicitly.
  */
 export const dynamic = 'force-dynamic';
 
 type Item = Draft & { id: number };
 
-/** 和单条接口同一套校验，任何一条不合格就整个请求拒掉 —— 别让事务开到一半才发现 */
+/** The same validation as the single-item endpoint. One bad item rejects the whole request —
+ *  don't discover it halfway through a transaction */
 function parseItems(value: unknown): Item[] | null {
   if (!Array.isArray(value) || value.length === 0) return null;
   const out: Item[] = [];
@@ -66,7 +69,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Incomplete fields' }, { status: 400 });
   }
 
-  // 同一个 id 在一批里出现两次会让 encounter/card 翻倍，先去重（保留最后一次的编辑）
+  // The same id twice in one batch would double the encounters/cards, so dedupe first
+  // (keeping the last edit)
   const byId = new Map(items.map((i) => [i.id, i]));
   const unique = [...byId.values()];
 
@@ -74,7 +78,7 @@ export async function POST(request: Request) {
 
   try {
     const result = await db.transaction(async (tx) => {
-      // ① 分类
+      // (1) category
       const [category] = await tx
         .select({ id: categories.id })
         .from(categories)
@@ -82,7 +86,7 @@ export async function POST(request: Request) {
         .limit(1);
       if (!category) throw new Error('NO_CATEGORY');
 
-      // ② 哪些还是 pending —— 其余的当作「已经处理过」跳过
+      // (2) which are still pending — the rest are skipped as "already handled"
       const rows = await tx
         .select({ id: inbox.id, source: inbox.source })
         .from(inbox)
@@ -100,7 +104,7 @@ export async function POST(request: Request) {
       const skipped = unique.filter((i) => !sourceById.has(i.id)).map((i) => i.id);
       if (todo.length === 0) return { confirmed: 0, skipped };
 
-      // ③ 已经存在的词
+      // (3) words that already exist
       const lemmas = [...new Set(todo.map((i) => i.lemma))];
       const existing = await tx
         .select({
@@ -113,8 +117,9 @@ export async function POST(request: Request) {
         .where(and(eq(words.categoryId, categoryId), inArray(words.lemma, lemmas)));
       const wordIdByLemma = new Map(existing.map((w) => [w.lemma, w.id]));
 
-      // ④ 批内先按 lemma 聚合 —— 同一批里两条 `dare` 共用一条 word，对比词取并集。
-      //    备注是自由文本没法合并，取**第一条非空的**（和「先到先得」一致）
+      // (4) aggregate within the batch by lemma — two `dare` items in one batch share one
+      //     word row, and their confusables are unioned. A note is free text and can't be
+      //     merged, so the **first non-empty one** wins (consistent with first-write-wins)
       const contrastsByLemma = new Map<string, string[]>();
       const remarkByLemma = new Map<string, string | null>();
       for (const item of todo) {
@@ -124,10 +129,12 @@ export async function POST(request: Request) {
         remarkByLemma.set(item.lemma, remarkByLemma.get(item.lemma) ?? item.remark);
       }
 
-      // ⑤ 新词一次插完。lemma 在这个分类里唯一（有唯一索引），所以能靠它对回 id
+      // (5) insert all new words at once. lemma is unique within the category (there's a
+      //     unique index), which is what makes matching ids back by lemma safe
       const newLemmas = lemmas.filter((l) => !wordIdByLemma.has(l));
       if (newLemmas.length > 0) {
-        // 新词排在这个分类的末尾 —— 默认 0 会排到最前，不是想要的
+        // New words go at the end of their category — the default of 0 would put them
+        // first, which isn't what's wanted
         const [{ maxOrder }] = await tx
           .select({ maxOrder: sql<number>`coalesce(max(${words.sortOrder}), 0)::int` })
           .from(words)
@@ -148,8 +155,10 @@ export async function POST(request: Request) {
         for (const w of created) wordIdByLemma.set(w.lemma, w.id);
       }
 
-      // ⑥ 已有词的对比词**合并而不是覆盖** —— 第二次遇到同一个词，不该抹掉上次加的。
-      //    备注同理，但没法取并集，所以**先到先得**：已经写过就保留原样
+      // (6) an existing word's confusables are **merged, not overwritten** — meeting the
+      //     same word a second time must not wipe what was added the first time. Same for the
+      //     note, except a union isn't possible, so **first write wins**: an existing note
+      //     is left untouched
       const merges: { id: number; contrasts: string[]; remark: string | null }[] = [];
       for (const w of existing) {
         const incoming = contrastsByLemma.get(w.lemma) ?? [];
@@ -174,15 +183,17 @@ export async function POST(request: Request) {
         `);
       }
 
-      // ⑦ 先取号再插 —— 这样 cards 挂到哪个 encounter 上是**已知的**，不靠返回顺序
+      // (7) draw ids first, then insert — so which encounter each card hangs off is
+      //     **known**, rather than inferred from the returned order
       const seq = await tx.execute<{ id: string }>(sql`
         SELECT nextval(pg_get_serial_sequence('encounters', 'id'))::bigint AS id
         FROM generate_series(1, ${todo.length})
       `);
       const encounterIds = seq.rows.map((r) => Number(r.id));
 
-      // ⑧ encounters。字段口径和单条接口逐字一致：
-      //    raw_text 存**句子**不是 inbox 原文；造句的条目 source 打 +ai 标记
+      // (8) encounters. The field semantics match the single-item endpoint exactly:
+      //     raw_text stores the **sentence**, not the raw inbox text; invented sentences get
+      //     a +ai marker on the source
       await tx.insert(encounters).values(
         todo.map((item, n) => ({
           id: encounterIds[n],
@@ -196,7 +207,7 @@ export async function POST(request: Request) {
         })),
       );
 
-      // ⑨ cards
+      // (9) cards
       await tx.insert(cards).values(
         todo.map((item, n) => ({
           encounterId: encounterIds[n],
@@ -204,7 +215,7 @@ export async function POST(request: Request) {
         })),
       );
 
-      // ⑩ inbox 收尾，草稿写回留档
+      // (10) close out the inbox rows, writing the draft back for the record
       await tx.execute(sql`
         UPDATE ${inbox} AS i
         SET status = 'processed', draft = v.draft::jsonb

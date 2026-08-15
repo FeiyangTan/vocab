@@ -6,13 +6,15 @@ import { parseScope } from '@/lib/categories';
 import { resetRound } from '@/lib/triage';
 
 /**
- * 「再来一轮」。`POST /api/triage/reset` body `{ categoryId: <id|'all'> }`
+ * "New round". `POST /api/triage/reset` body `{ categoryId: <id|'all'> }`
  *
- * 把范围内的「认识」清掉、位置按词频序重打 —— 所以一轮结束就忘干净，
- * 上一轮认识的词下一轮照样出现。这个模式是「把一批词过一遍」，
- * 不是长期记忆调度（那是挖空复习的活）。
+ * Clears the Know flags in scope and re-stamps positions in frequency order — so a round
+ * forgets completely when it ends, and a word you knew last round comes up again next round.
+ * This mode is "sweep through a batch of words", not long-term memory scheduling (that's
+ * cloze review's job).
  *
- * 🔴 **按范围生效**：从某个分类点只重置那个分类，不会把别的分类的进度冲掉。
+ * 🔴 **Scoped**: triggering it from inside a category resets only that category and never
+ * wipes another category's progress.
  */
 export const dynamic = 'force-dynamic';
 

@@ -7,10 +7,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { MAX_REMARK } from '@/lib/remark';
 
 /**
- * 备注编辑器 + **立刻保存**。用在词已经存在的地方：词汇页展开区、复习页背面。
+ * The note editor plus **immediate save**. Used where the word already exists: the words page's
+ * expanded area, and the back of a review card.
  *
- * 收集箱审核页不能用这个 —— 那时词还没创建，没有 id 可 PUT，
- * 那边直接把备注攒进本地 Draft，随「确认」一起提交。
+ * The inbox review page can't use this — the word doesn't exist yet, so there's no id to PUT
+ * to. That page accumulates the note in its local Draft, which goes out with Confirm.
  */
 export function RemarkRow({
   wordId,
@@ -36,7 +37,8 @@ export function RemarkRow({
     setEditing(false);
     if (!response.ok) return;
     const data = (await response.json().catch(() => ({}))) as { remark?: string | null };
-    // 用服务端清洗后的结果，别用本地的 —— trim / 截断都在那边
+    // Use the server's cleaned result rather than the local one — trimming and truncation
+    // both live there
     const next = data.remark ?? null;
     setDraft(next ?? '');
     onChange(next);
@@ -87,7 +89,7 @@ export function RemarkRow({
 
   return (
     <div className="flex items-start justify-between gap-2">
-      {/* whitespace-pre-wrap：备注可能是几行，换行要留着 */}
+      {/* whitespace-pre-wrap: a note may be several lines, and the breaks must survive */}
       <p className="min-w-0 flex-1 whitespace-pre-wrap text-sm">{remark}</p>
       <Button
         variant="ghost"

@@ -7,13 +7,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
 /**
- * 改词本身。用在词汇页的展开区。
+ * Editing the word itself. Used in the words page's expanded area.
  *
- * 保存成功后必须 `router.refresh()` —— 词、音标、词频档位条都在**卡片头部**
- * 由服务端渲染，只更新展开区的话头部会停在旧词上。
+ * A successful save must be followed by `router.refresh()` — the word, its phonetics and the
+ * frequency band are all rendered by the server in the **card header**, so updating only the
+ * expanded area would leave the header showing the old word.
  *
- * 撞 `(lemma, category_id)` 唯一索引时接口返回 409，这里把文案显示出来、
- * **输入框保持打开**让人接着改，而不是默默关掉。
+ * Colliding with the `(lemma, category_id)` unique index returns 409, and this shows that
+ * message while **keeping the input open** so the edit can continue, rather than closing
+ * silently.
  */
 export function LemmaRow({ wordId, lemma }: { wordId: number; lemma: string }) {
   const router = useRouter();
@@ -40,7 +42,7 @@ export function LemmaRow({ wordId, lemma }: { wordId: number; lemma: string }) {
     if (!response.ok) {
       const data = (await response.json().catch(() => ({}))) as { error?: string };
       setError(data.error ?? 'Rename failed');
-      return; // 不关输入框
+      return; // leave the input open
     }
     setEditing(false);
     router.refresh();

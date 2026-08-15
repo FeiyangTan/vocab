@@ -9,8 +9,8 @@ import { TriageSession } from './triage-session';
 export const dynamic = 'force-dynamic';
 
 /**
- * 「快速过词」。和同级的挖空复习共用一个范围（某个分类，或 `/review/all/triage`
- * 的全部），队列和判定完全独立。
+ * Quick pass. It shares its scope with the sibling cloze review (one category, or everything
+ * via `/review/all/triage`), while the queue and the judgements are entirely separate.
  */
 export default async function TriagePage({
   params,

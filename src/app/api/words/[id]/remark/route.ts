@@ -5,13 +5,13 @@ import { words } from '@/db/schema';
 import { cleanRemark } from '@/lib/remark';
 
 /**
- * 设置一个词的备注。`PUT /api/words/{id}/remark` body `{ remark: string | null }`
+ * Set a word's note. `PUT /api/words/{id}/remark` body `{ remark: string | null }`
  *
- * 和对比词那个接口一样是**整体替换**、幂等：词汇页和复习页共用一个，
- * 前端把改完的整段传回来即可。
+ * Like the confusables endpoint this is a **whole replacement** and idempotent: the words page
+ * and the review page share it, and the frontend just sends the edited text back in full.
  *
- * 传 null 或空串 = 清空备注（这是**有意**的语义，不是漏判）——
- * 界面上清空输入框保存就该把备注删掉。
+ * Passing null or an empty string = clear the note (**deliberate** semantics, not an
+ * oversight) — emptying the box in the UI and saving should delete the note.
  */
 export async function PUT(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const id = Number((await ctx.params).id);

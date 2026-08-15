@@ -1,15 +1,19 @@
 /**
- * 一次性脚本：给已有的 encounter 补词性。
+ * A one-off script: fill in the part of speech for existing encounters.
  *
  *   psql "$DATABASE_URL" -tAc "COPY (SELECT e.id, w.lemma, e.raw_text, e.note
  *     FROM encounters e JOIN words w ON w.id=e.word_id WHERE e.pos IS NULL) TO STDOUT WITH CSV" \
  *     | node --env-file=.env.local scripts/backfill-pos.mjs > /tmp/pos.sql
  *
- * 和 `backfill-zipf.mjs` 一样**只往 stdout 吐 SQL，自己不连库**（Neon 的 driver
- * 在纯 Node 脚本里还要配 WebSocket，一次性脚本不值得），交给 psql 执行、
- * 顺便能先看一眼要写什么。
+ * Like `backfill-zipf.mjs`, it **only writes SQL to stdout and never connects to the
+ * database** (Neon's driver needs WebSocket setup inside a plain Node script, which isn't
+ * worth it for a one-off). psql runs it, and you get to read what will be written first.
  *
- * 🔴 只写 `pos`，**绝不动 `note`** —— 释义是已经审核过的，模型不该重写它。
+ * 🔴 Writes `pos` only and **never touches `note`** — the definitions have already been
+ * reviewed, and the model has no business rewriting them.
+ *
+ * 🔴 The `SYSTEM` prompt and the schema `description` fields below stay in Chinese: they are
+ * what is sent to the model, and they are what makes it reason about Chinese definitions.
  */
 import Anthropic from '@anthropic-ai/sdk';
 import { createInterface } from 'node:readline';
@@ -90,7 +94,8 @@ for (let i = 0; i < rows.length; i += BATCH) {
   const text = response.content.find((b) => b.type === 'text');
   const parsed = JSON.parse(text.text);
   const wanted = new Set(chunk.map((r) => r.id));
-  // 模型回填的 id 必须是这一批发过去的 —— 别让它的输出决定写哪一行
+  // An id the model echoes back must be one from this batch — never let its output decide
+  // which row gets written
   for (const item of parsed.items) {
     if (wanted.has(item.id) && typeof item.pos === 'string') results.push(item);
   }
@@ -98,12 +103,13 @@ for (let i = 0; i < rows.length; i += BATCH) {
 }
 
 const withPos = results.filter((r) => r.pos.trim());
-process.stderr.write(`拿到 ${results.length} 条，其中有词性的 ${withPos.length} 条\n`);
+process.stderr.write(`got ${results.length}, of which ${withPos.length} have a part of speech\n`);
 
 if (withPos.length === 0) process.exit(0);
 
 const values = withPos
-  // 单引号 —— JSON.stringify 给的是双引号，Postgres 会当成**标识符**不是字符串
+  // Single quotes — JSON.stringify emits double quotes, which Postgres reads as an
+  // **identifier** rather than a string
   .map((r) => `(${r.id}::bigint, '${r.pos.trim().slice(0, 12).replaceAll("'", "''")}'::text)`)
   .join(',\n  ');
 

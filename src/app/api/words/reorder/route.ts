@@ -4,14 +4,16 @@ import { getDb } from '@/db';
 import { words } from '@/db/schema';
 
 /**
- * 重排。`PUT /api/words/reorder` body `{ ids: number[] }` —— 当前列表的新次序。
+ * Reorder. `PUT /api/words/reorder` body `{ ids: number[] }` — the current list's new order.
  *
- * 🔴 **只重排传进来的这批，列表外的词一个都不动。**
+ * 🔴 **Only the ids passed in are reordered; nothing outside the list moves.**
  *
- * `sort_order` 是一条全局序列，但界面上看到的常常是筛选后的子集（在 `videos`
- * 的 35 个里拖动，不该影响另外 187 个）。做法是**只在这批词自己的值域里洗牌**：
- * 把它们现有的 sort_order 取出来升序排好，再按新次序重新分配这些值。
- * 值的集合没变，所以这批词和列表外任何一个词的相对位置都保持原样。
+ * `sort_order` is one global sequence, but what's on screen is usually a filtered subset
+ * (dragging among the 35 in `videos` must not disturb the other 187). The approach is to
+ * **shuffle only within this batch's own set of values**: take their existing sort_orders,
+ * sort them ascending, and hand them back out in the new order. The set of values is
+ * unchanged, so every one of these words keeps its relative position against every word
+ * outside the list.
  */
 export const dynamic = 'force-dynamic';
 
@@ -32,7 +34,7 @@ export async function PUT(request: Request) {
         .where(inArray(words.id, ids));
       if (rows.length !== ids.length) throw new Error('MISSING');
 
-      // 这批词现有的位置，升序 —— 待会儿按新次序发回去
+      // This batch's existing positions, ascending — handed back out in the new order
       const slots = rows.map((r) => r.sortOrder).sort((a, b) => a - b);
       const pairs = ids.map((id, i) => ({ id, sortOrder: slots[i] }));
 

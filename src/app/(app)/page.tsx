@@ -1,8 +1,9 @@
 import { redirect } from 'next/navigation';
 
 /**
- * 原来这里是个「三个入口」的启动页。现在三个功能常驻在菜单上、还带数量角标，
- * 这一层就成了多余的一次点击 —— 直接进复习，那是打开应用最常做的事。
+ * This used to be a "three entry points" splash. Now that all three live permanently on the
+ * menu with their own count badges, this layer is just an extra tap — so it goes straight to
+ * review, which is what opening the app is usually for.
  */
 export default function Home() {
   redirect('/review');

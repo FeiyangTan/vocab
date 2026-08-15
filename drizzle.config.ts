@@ -1,11 +1,15 @@
 import { config } from 'dotenv';
 import { defineConfig } from 'drizzle-kit';
 
-// drizzle-kit 不走 Next 的 env 加载，得自己读 .env.local
+// drizzle-kit doesn't use Next's env loading, so read .env.local directly
 config({ path: '.env.local' });
 
 const url = process.env.DATABASE_URL_DIRECT;
-if (!url) throw new Error('DATABASE_URL_DIRECT 未配置（迁移必须走直连串，不能走 -pooler）');
+if (!url) {
+  throw new Error(
+    'DATABASE_URL_DIRECT is not configured (migrations must use the direct string, not -pooler)',
+  );
+}
 
 export default defineConfig({
   dialect: 'postgresql',

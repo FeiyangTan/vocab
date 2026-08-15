@@ -1,14 +1,16 @@
 /**
- * 单用户单密码认证。
+ * Single-user, single-password auth.
  *
- * 设计取舍：只有我（jimmy）一个人用，不需要用户表、session 表、过期刷新。
- * cookie 里放的是 HMAC(AUTH_SECRET, 固定串)，服务端每次重算一遍比对 ——
- * 拿不到 AUTH_SECRET 就伪造不出来，这对单用户场景足够了。
+ * The trade-off: jimmy is the only user, so there is no need for a users table, a sessions
+ * table, or expiry/refresh. The cookie holds HMAC(AUTH_SECRET, fixed string), and the server
+ * recomputes and compares it on every request — without AUTH_SECRET you can't forge one,
+ * which is enough for a single-user app.
  */
 
 export const COOKIE_NAME = 'vocab_auth';
 
-/** cookie 有效期一年。iOS 上 PWA 是独立进程，登录态不与 Safari 共享，过期要重输密码很烦。 */
+/** Cookie lasts a year. On iOS a PWA is its own process and doesn't share login state with
+ *  Safari, so an expiry means retyping the password — annoying enough to avoid. */
 export const COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
 const SESSION_PAYLOAD = 'vocab-session-v1';
@@ -34,7 +36,7 @@ async function hmacHex(secret: string, payload: string): Promise<string> {
     .join('');
 }
 
-/** 定长比较，避免按字符提前返回泄漏信息。 */
+/** Constant-time compare, so an early per-character return can't leak information. */
 export function safeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let diff = 0;
@@ -42,18 +44,18 @@ export function safeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-/** 登录成功后种进 cookie 的值。 */
+/** The value written into the cookie on successful login. */
 export function sessionToken(): Promise<string> {
   return hmacHex(requireSecret(), SESSION_PAYLOAD);
 }
 
-/** 校验请求里带来的 cookie 值。 */
+/** Validate the cookie value carried by a request. */
 export async function isValidSession(value: string | undefined): Promise<boolean> {
   if (!value) return false;
   return safeEqual(value, await sessionToken());
 }
 
-/** 校验 /api/inbox?t=... 的 token。捕获接口走 token，不走 cookie。 */
+/** Validate the token on /api/inbox?t=... The capture endpoint uses a token, not the cookie. */
 export function isValidInboxToken(value: string | null): boolean {
   const expected = process.env.INBOX_TOKEN;
   if (!expected) throw new Error('INBOX_TOKEN is not configured');

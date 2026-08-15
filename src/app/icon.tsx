@@ -1,6 +1,6 @@
 import { ImageResponse } from 'next/og';
 
-/** 用 ImageResponse 生成，省得往仓库里塞二进制图标文件。 */
+/** Generated with ImageResponse, which keeps binary icon files out of the repository. */
 export const size = { width: 512, height: 512 };
 export const contentType = 'image/png';
 

@@ -4,10 +4,11 @@ import { getDb } from '@/db';
 import { cards, categories, inbox, words } from '@/db/schema';
 
 /**
- * 应用外壳。`/login` 不在这个路由分组里，所以登录页是干净的一屏。
+ * The app shell. `/login` is outside this route group, so the login page is a clean screen.
  *
- * 三个数量在这里查一次，侧边栏和底栏共用 —— 原本挂在首页的那三个查询搬了过来，
- * 首页那个「三个入口」的启动页也因此不再需要（数字已经在菜单上了）。
+ * The three counts are queried once here and shared by the sidebar and the bottom tabs — they
+ * moved over from the home page, which is also why the home page's "three entry points"
+ * splash is no longer needed (the numbers are on the menu already).
  */
 export const dynamic = 'force-dynamic';
 
@@ -33,9 +34,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="flex min-h-dvh">
       <Sidebar counts={counts} />
       {/*
-        窄屏底部有标签栏，内容区留出空间，否则会盖住复习页的评分按钮。
-        这里必须是 flex 列容器：复习页的 <main> 要靠 flex-1 撑满**剩余**高度，
-        它自己写 min-h-dvh 的话会撑满整个视口，底部按钮就跑到底栏下面去了。
+        On narrow screens there are bottom tabs, so the content area leaves room — otherwise
+        they cover the review page's grading buttons.
+        This has to be a flex column: the review page's <main> relies on flex-1 to fill the
+        **remaining** height. Giving it min-h-dvh instead would fill the entire viewport and
+        push the buttons underneath the tab bar.
       */}
       <div className="flex min-w-0 flex-1 flex-col pb-20 md:pb-0">{children}</div>
       <BottomTabs counts={counts} />

@@ -3,11 +3,12 @@ import { setModel } from '@/db/settings';
 import { isValidModel, isValidPurpose } from '@/lib/models';
 
 /**
- * 改某条 AI 路径用的模型。`PUT /api/settings/models` body `{ purpose, model }`
+ * Change which model one AI path uses. `PUT /api/settings/models` body `{ purpose, model }`
  *
- * 🔴 **两个字段都要在白名单里才写。** 放一个不存在的 model id 进去，
- * 下一次 AI 调用就会直接 500 —— 而且是在你（jimmy）点「处理」的时候才炸，
- * 离改设置已经隔了很远，很难联想到是这儿的问题。挡在入口最省事。
+ * 🔴 **Both fields must be on the allow-list before anything is written.** Store a model id
+ * that doesn't exist and the next AI call 500s outright — and it blows up when jimmy presses
+ * Process, long after the setting was changed, which makes it hard to connect back to here.
+ * Blocking it at the entrance is far cheaper.
  */
 export const dynamic = 'force-dynamic';
 

@@ -4,14 +4,16 @@ import { isValidPurpose } from '@/lib/models';
 import { DEFAULT_PROMPT, validatePrompt } from '@/lib/prompts';
 
 /**
- * 改某条 AI 路径的 system prompt。
+ * Change one AI path's system prompt.
  * `PUT /api/settings/prompts` body `{ purpose, prompt }`
  *
- * `prompt: null` = **恢复默认**（删掉库里那一行，不是写回默认文本，见 `setPrompt`）。
+ * `prompt: null` = **reset to default** (deletes the row rather than writing the default text
+ * back — see `setPrompt`).
  *
- * 🔴 **空字符串挡在这里。** 传空的 system 给 API 不会报错，模型只是在没有任何
- * 指令的情况下自由发挥 —— 整理出来的东西看着像那么回事、字段却对不上，
- * 要等到审核页才发现。想回出厂设置有「恢复默认」，不是清空。
+ * 🔴 **Empty strings are blocked here.** Passing an empty system prompt to the API doesn't
+ * error; the model simply improvises with no instructions at all, and what comes back looks
+ * plausible while the fields don't line up — which you only discover at the review page. The
+ * way back to factory settings is "Reset to default", not clearing the box.
  */
 export const dynamic = 'force-dynamic';
 

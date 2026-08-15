@@ -5,14 +5,15 @@ import { categories, words } from '@/db/schema';
 import { cleanCategoryName, parseCategoryId } from '@/lib/categories';
 
 /**
- * 改名 / 设为默认 / 删除。
+ * Rename / set default / delete.
  *
  * `PATCH /api/categories/{id}`  body: `{ name?: string; isDefault?: true }`
  * `DELETE /api/categories/{id}?moveTo=<id>`
  *
- * 删除策略：分类里还有词就**不删**，必须带 `moveTo` 把词转走。库层的
- * `onDelete: 'restrict'` 是同一条规则的第二道保险 —— 这里的检查只是为了
- * 给出能看懂的报错，真正拦住数据丢失的是外键。
+ * Deletion policy: a category holding words **is not deleted**; `moveTo` must be supplied to
+ * relocate them. The database's `onDelete: 'restrict'` is the second line of the same rule —
+ * the check here exists to produce a comprehensible error, but what actually prevents data
+ * loss is the foreign key.
  */
 export const dynamic = 'force-dynamic';
 
@@ -52,7 +53,8 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   }
 
   if (body.isDefault === true) {
-    // 「恰好一个默认」没有数据库约束能表达，只能靠事务：先全置 false 再置一个 true
+    // "Exactly one default" can't be expressed as a database constraint, so a transaction
+    // carries it: set every row false, then set this one true
     await db.transaction(async (tx) => {
       await tx.update(categories).set({ isDefault: false }).where(ne(categories.id, id));
       await tx.update(categories).set({ isDefault: true }).where(eq(categories.id, id));
@@ -82,7 +84,7 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
         .limit(1);
       if (!target) throw new Error('NOT_FOUND');
 
-      // 词必须有归属，所以最后一个分类删不得
+      // Every word must belong somewhere, so the last category can't be deleted
       const [{ total }] = await tx
         .select({ total: sql<number>`count(*)::int` })
         .from(categories);
@@ -106,7 +108,8 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
 
       await tx.delete(categories).where(eq(categories.id, id));
 
-      // 删掉的是默认分类，默认得有个去处，否则审核页没有初值可选
+      // The default was just deleted, so the flag needs a new home — otherwise the review
+      // page has nothing to preselect
       if (target.isDefault) {
         const [next] = await tx
           .select({ id: categories.id })

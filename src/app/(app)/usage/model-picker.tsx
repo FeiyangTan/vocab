@@ -13,15 +13,17 @@ import {
 import { cn } from '@/lib/utils';
 
 /**
- * 两条 AI 路径各用哪个模型。放在用量页最上面 —— **先看用什么，再看花了多少**，
- * 而且下面的花费本来就按模型分组，改完刷新就能直接对比。
+ * Which model each AI path uses. At the top of the usage page — **what you're using comes
+ * before what it cost** — and the spend below is already grouped by model, so a refresh after
+ * changing it gives you the comparison directly.
  *
- * 两条路径分开选是有意的：整理草稿是质量关键路径（词形还原、按语境写释义、
- * 生成能和原句对齐的挖空句），对比词那条风险低得多（同音词已经不靠模型了）。
+ * Choosing per path is deliberate: drafting is the quality-critical path (lemmatisation,
+ * context-specific definitions, a cloze that aligns with the original sentence), while
+ * confusables carries far less risk (homophones no longer depend on the model at all).
  */
 export function ModelPicker({ current }: { current: Record<Purpose, ModelId> }) {
   const router = useRouter();
-  // 乐观更新：点下去立刻变，请求失败再回滚
+  // Optimistic update: it changes on tap, and rolls back if the request fails
   const [value, setValue] = useState(current);
   const [busy, setBusy] = useState<Purpose | null>(null);
   const [error, setError] = useState('');
@@ -44,7 +46,7 @@ export function ModelPicker({ current }: { current: Record<Purpose, ModelId> }) 
       setError(data.error ?? 'Failed to save');
       return;
     }
-    // 下面的花费统计按模型分组，换完刷一下才对得上
+    // The spend breakdown below is grouped by model, so it needs a refresh to line up
     router.refresh();
   }
 

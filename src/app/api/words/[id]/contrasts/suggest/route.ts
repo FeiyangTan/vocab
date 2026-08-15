@@ -9,13 +9,15 @@ import { COMMON_ZIPF, isCommon, isCommonEnoughForHomophone } from '@/lib/frequen
 import { homophonesOf } from '@/lib/phonetics';
 
 /**
- * 让 Claude 找形近/音近的对比词并**直接加进去**。
+ * Ask Claude for look-alike / sound-alike confusables and **add them directly**.
  * `POST /api/words/{id}/contrasts/suggest`
  *
- * 🔴 **合并而不是覆盖** —— 和确认接口里那条规则一样。手动加的对比词是人自己
- * 栽过跟头才记下的，绝不能被模型的建议冲掉。
+ * 🔴 **Merged, not overwritten** — the same rule as in the confirm endpoint. A manually added
+ * confusable is something he got wrong himself and wrote down, and the model's suggestions
+ * must never wash it away.
  *
- * 调用失败返回 502，库里什么都不动 —— 宁可让人重试，也不要写进半截结果。
+ * A failed call returns 502 and touches nothing in the database — better to make someone
+ * retry than to write half a result.
  */
 export const dynamic = 'force-dynamic';
 
@@ -43,33 +45,39 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
   }
 
   /*
-   * 两道过滤，都只作用在**模型的建议**上：
-   * 1. 挡掉目标词本身（模型有时不听话）
-   * 2. 挡掉不够常用的 —— prompt 里已经要求「雅思范围内」，但那只是请求；
-   *    这一道是保证。拿生僻词当对比词毫无意义，人根本不会把没见过的词和它搞混。
+   * Two filters, both applied **only to the model's suggestions**:
+   * 1. drop the target word itself (the model doesn't always comply)
+   * 2. drop anything not common enough — the prompt already asks for "within IELTS range",
+   *    but that's a request; this is the guarantee. A rare word makes a useless confusable,
+   *    because nobody confuses a word they've never seen with anything.
    *
-   * 🔴 `word.contrasts`（手动加的）**不过这两道**。生僻与否轮不到系统判断。
+   * 🔴 `word.contrasts` (added by hand) **passes through neither filter**. Whether something
+   * is too rare is not the system's call to make.
    */
   const lower = word.lemma.trim().toLowerCase();
   const fresh = suggested.filter((w) => w.trim().toLowerCase() !== lower && isCommon(w));
   const dropped = suggested.length - fresh.length;
 
   /*
-   * **同音词单独算，不指望模型想得起来。**
+   * **Homophones are computed separately, rather than hoping the model remembers them.**
    *
-   * 音标完全相同就是同音词 —— 从 CMUdict 的音标表机械枚举，精确且不会漏
-   *（`flee/flea`、`forth/fourth`、`whine/wine` 这些模型未必每次都给）。
+   * Identical phonetics is what a homophone is — enumerated mechanically from CMUdict's
+   * phonetics table, exact and exhaustive (`flee/flea`, `forth/fourth`, `whine/wine` are ones
+   * the model won't reliably produce).
    *
-   * 常用度用**更松的那条线**（`HOMOPHONE_ZIPF`）：3.5 是为了卡模型的凑数，
-   * 而同音词是算出来的事实，拿 3.5 会误伤 `pore`(2.68)、`oar`(2.93) 这些真同音词，
-   * 而它们恰恰最容易拼错。再加一道「像不像正经英文词」，挡掉音标表里混进来的
-   * 外语词和人名（`pour → por` 是西班牙语缩写，`bare → bache` 是人名）。
+   * Frequency uses **the looser line** (`HOMOPHONE_ZIPF`): 3.5 exists to stop the model from
+   * padding, whereas a homophone is a computed fact, and 3.5 would wrongly cut real ones like
+   * `pore`(2.68) and `oar`(2.93) — precisely the words most easily misspelled. On top of that
+   * comes a "does this look like a real English word" check, which blocks the foreign words
+   * and names that sit in the phonetics table (`pour → por` is a Spanish abbreviation,
+   * `bare → bache` is a personal name).
    */
   const homophones = homophonesOf(word.lemma).filter(
     (w) => isCommonEnoughForHomophone(w) && looksLikeRealWord(w),
   );
 
-  // 同音词排在模型建议前面 —— 它们是确定的，模型给的是猜的
+  // Homophones come before the model's suggestions — they're certain, the model's are
+  // guesses
   const contrasts =
     cleanContrasts([...word.contrasts, ...homophones, ...fresh])?.slice(0, MAX_CONTRASTS) ??
     word.contrasts;
@@ -84,7 +92,8 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
     contrasts,
     added,
     glosses: contrastHintsFor(contrasts),
-    // 一个都没剩时前端要说清楚是「没找到」而不是「没反应」
+    // When nothing survives, the frontend has to say "found none" rather than appear
+    // unresponsive
     dropped,
     threshold: COMMON_ZIPF,
   });

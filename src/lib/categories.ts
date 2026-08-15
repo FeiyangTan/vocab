@@ -1,11 +1,11 @@
-/** 分类名长度上限。不是产品功能，是手滑粘一大段进来的防线 */
+/** Max category-name length. Not a product feature — a guard against pasting a page in */
 export const MAX_CATEGORY_NAME = 40;
 
 /**
- * 清洗分类名：trim、把中间的连续空白折成一个空格、截断。
+ * Clean a category name: trim, collapse runs of interior whitespace to one space, truncate.
  *
- * 两个写入口共用 —— `POST /api/categories`（新建）和
- * `PATCH /api/categories/{id}`（改名）。返回 null 表示这个名字不能用。
+ * Shared by both write paths — `POST /api/categories` (create) and
+ * `PATCH /api/categories/{id}` (rename). null means the name is unusable.
  */
 export function cleanCategoryName(value: unknown): string | null {
   if (typeof value !== 'string') return null;
@@ -15,10 +15,10 @@ export function cleanCategoryName(value: unknown): string | null {
 }
 
 /**
- * 路径参数 / 请求体里的分类 id 解析成正整数。
+ * Parse a category id from a path param or request body into a positive integer.
  *
- * 只保证「格式对」，**不保证库里存在** —— 存在性由调用方查库确认，
- * 因为报错文案和事务边界在每个路由里不一样。
+ * Guarantees the *shape* only, **not that the row exists** — existence is the caller's job to
+ * check, because the error wording and transaction boundary differ per route.
  */
 export function parseCategoryId(value: unknown): number | null {
   const n = typeof value === 'string' ? Number(value) : value;
@@ -27,14 +27,14 @@ export function parseCategoryId(value: unknown): number | null {
 }
 
 /**
- * 复习范围：某个分类，或者 `'all'`（不挑分类，四个分类混着过）。
+ * Review scope: one category, or `'all'` (no category filter, everything mixed together).
  *
- * 两种复习模式共用。分类 id 和 `'all'` 走同一个参数位，所以 `/review/5` 和
- * `/review/all` 能落在同一个动态路由上，不用为「全部」再开一套页面。
+ * Shared by both review modes. A category id and `'all'` occupy the same parameter slot, so
+ * `/review/5` and `/review/all` land on the same dynamic route — no separate page for "all".
  */
 export type Scope = number | 'all';
 
-/** `parseCategoryId` 的超集：多认一个 `'all'`。 */
+/** A superset of `parseCategoryId`: also accepts `'all'`. */
 export function parseScope(value: unknown): Scope | null {
   if (value === 'all') return 'all';
   return parseCategoryId(value);

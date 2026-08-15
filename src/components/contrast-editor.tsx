@@ -13,12 +13,13 @@ import { MAX_CONTRASTS } from '@/lib/contrasts';
 import { speak } from '@/lib/speak';
 
 /**
- * 对比词 chip 编辑器 —— **纯 UI，不碰网络**。
+ * The confusable chip editor — **pure UI, no network**.
  *
- * 拆成这一层是因为有两种保存时机：
- * - 复习页 / 词汇页：词已存在，改一下就立刻 PUT（外面包一层 ContrastRow）
- * - 收集箱审核页：词**还不存在**（确认的事务里才创建），只能先攒在本地 state，
- *   随「确认」一起提交
+ * It's split out because there are two different moments to save:
+ * - review page / words page: the word exists, so an edit PUTs immediately (wrapped by
+ *   ContrastRow)
+ * - inbox review page: the word **doesn't exist yet** (it's created inside the confirm
+ *   transaction), so edits accumulate in local state and go out with Confirm
  */
 export function ContrastEditor({
   value,
@@ -30,17 +31,19 @@ export function ContrastEditor({
 }: {
   value: string[];
   onChange: (next: string[]) => void;
-  /** 词汇列表页一行一个词，「对比词」这个标签就省了 */
+  /** The words list is one word per row, so the "Confusables" label is redundant there */
   compact?: boolean;
   busy?: boolean;
   /**
-   * 只显示不编辑：保留词和**朗读**（发音不是编辑，而且带读是对比词当初的核心要求），
-   * 去掉删除和添加。词汇页主卡片用这个，增删在展开的详情里。
+   * Display only: keeps the words and **speech** (speaking isn't editing, and hearing them was
+   * the original point of confusables), drops add and remove. The words page's collapsed card
+   * uses this; adding and removing live in the expanded detail.
    */
   readOnly?: boolean;
   /**
-   * 词 → 中文，**服务端查好传下来的**（`src/lib/dictionary.ts`）。
-   * 只含查得到的那些；查不到的不给 title，不显示空气泡。
+   * word → Chinese gloss, **resolved on the server and passed down**
+   * (`src/lib/dictionary.ts`). Only contains what was found; anything missing gets no title
+   * and so pops no empty bubble.
    */
   glosses?: Record<string, string>;
 }) {
@@ -62,17 +65,20 @@ export function ContrastEditor({
       )}
 
       {/*
-        不用 Badge 的灰底胶囊 —— 对比词是全站最像「纸上批注」的一处，
-        衬线斜体 + 墨绿下划线比方块 chip 更贴纸质风。
+        Not Badge's grey pill — confusables are the most annotation-like thing in the app, and
+        a serif italic with an ink-green underline suits the paper look better than a square
+        chip.
       */}
       {value.map((word) => (
-        /* `flex-wrap` + `min-w-0`：展开释义后这个 chip 可能比一行还宽，
-           得允许它在内部折行，否则窄屏上整页会被撑出横向滚动条 */
+        /* `flex-wrap` + `min-w-0`: with the gloss expanded this chip can be wider than a
+           line, so it has to be allowed to wrap internally — otherwise a narrow screen gets a
+           horizontal scrollbar across the whole page */
         <span key={word} className="inline-flex min-w-0 flex-wrap items-center gap-0.5">
           {/*
-            词本身就是发音按钮 —— 旁边再挂个喇叭图标是多余的一次视觉噪音。
-            hover 显示中文用 Tooltip 不用原生 `title`：后者要静止 1–2 秒才弹，
-            稍微动一下就不出，实际用起来常常以为没有提示。
+            The word is itself the speak button — a separate speaker icon beside it would be
+            pure visual noise. The hover gloss uses Tooltip rather than the native `title`:
+            the latter needs 1–2 seconds of stillness and won't appear if the pointer drifts,
+            so in practice you conclude there is no hint at all.
           */}
           <ChipButton word={word} gloss={glosses?.[word]} />
           {!readOnly && (
@@ -125,18 +131,21 @@ export function ContrastEditor({
 }
 
 /**
- * 一个对比词 chip：**点一下 = 发音 + 就地展开音标和中文**，再点收起。
+ * One confusable chip: **tap = speak + expand the phonetics and gloss in place**, tap again to
+ * collapse.
  *
- * 🔴 为什么不是「点击改成看释义」：点击原本就是发音，那不能丢 —— 对比词很多是
- * **读音**相近才容易混（crispy / crisis），光看拼写体会不出来。所以两件事一起做。
+ * 🔴 Why tapping wasn't simply repurposed to "show the gloss": tapping already meant speak,
+ * and that can't be lost — many confusables are confusable because they **sound** alike
+ * (crispy / crisis), which the spelling doesn't convey. So it does both.
  *
- * 🔴 为什么展开在行内而不是弹气泡：手机上 Radix 的 `Tooltip` 设计上就不响应触摸，
- * 换 `Popover` 又要处理定位、层级、点外面关闭，而且快速过词那个手势容器是
- * `overflow-hidden`，浮层容易被截。行内不依赖任何这些，各端行为完全一致。
- * 代价是那一行会重排，可以接受。
+ * 🔴 Why it expands inline rather than in a popup: on mobile, Radix's `Tooltip` deliberately
+ * doesn't respond to touch, and switching to `Popover` means handling positioning, stacking
+ * and click-outside — plus Quick pass's gesture container is `overflow-hidden`, so a floating
+ * layer gets clipped. Inline depends on none of that and behaves identically everywhere. The
+ * cost is that the row reflows, which is acceptable.
  *
- * 桌面的 hover 气泡照旧保留 —— 悬停比点击更省事。**但展开之后就不再弹**，
- * 否则同一句话在屏幕上出现两遍。
+ * The desktop hover bubble is kept — hovering is less work than tapping. **But it stops
+ * appearing once expanded**, or the same text would be on screen twice.
  */
 function ChipButton({ word, gloss }: { word: string; gloss?: string }) {
   const [open, setOpen] = useState(false);
@@ -146,7 +155,7 @@ function ChipButton({ word, gloss }: { word: string; gloss?: string }) {
       type="button"
       onClick={() => {
         speak(word);
-        // 查不到中文的词只发音，不留一个点了没反应的展开态
+        // A word with no gloss only speaks, rather than leaving a toggle that does nothing
         if (gloss) setOpen((v) => !v);
       }}
       aria-label={gloss ? `Speak ${word} and ${open ? 'hide' : 'show'} its gloss` : `Speak ${word}`}
@@ -157,7 +166,7 @@ function ChipButton({ word, gloss }: { word: string; gloss?: string }) {
     </button>
   );
 
-  // 查不到中文的词不套 Tooltip —— 不弹空气泡
+  // No gloss means no Tooltip wrapper — nothing should pop an empty bubble
   if (!gloss) return button;
 
   return (
@@ -173,9 +182,11 @@ function ChipButton({ word, gloss }: { word: string; gloss?: string }) {
         </TooltipProvider>
       )}
       {open && (
-        /* 弱化样式：它是注解，别和斜体的词本身抢。
-           **不加 `whitespace-nowrap`** —— 释义能有二三十个字符
-           （`/ˈkraɪsɪs/ n. 危机, 危险期, 决定性时刻`），窄屏上不让它折行就会横向溢出 */
+        /* Deliberately quiet styling: it's an annotation and shouldn't compete with the
+           italic word itself.
+           **No `whitespace-nowrap`** — a gloss can run twenty or thirty characters
+           (`/ˈkraɪsɪs/ n. 危机, 危险期, 决定性时刻`), and refusing to wrap overflows
+           horizontally on a narrow screen */
         <span className="min-w-0 text-xs text-muted-foreground">{gloss}</span>
       )}
     </>

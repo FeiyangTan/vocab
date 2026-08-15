@@ -7,22 +7,27 @@ import { COOKIE_NAME, isValidInboxToken, isValidSession } from '@/lib/auth';
 import { parseCategoryId } from '@/lib/categories';
 
 /**
- * 捕获落点。**两种身份都收**：
+ * Where captures land. **Accepts either identity**:
  *
- * - `?t=<token>` —— 给 iOS 快捷指令用。token 放 query 而非 header，因为快捷指令加 header 麻烦。
- * - 登录 cookie —— 给网页端手动添加用，这样前端不必把 token 塞进 JS。
+ * - `?t=<token>` — for the iOS Shortcut. The token goes in the query rather than a header
+ *   because adding headers in Shortcuts is painful.
+ * - the login cookie — for adding by hand on the web, so the frontend needn't embed the token
+ *   in JS.
  *
- * 这条路由在 proxy.ts 的 PUBLIC_PATHS 里（proxy 不拦），所以两种校验都得在这里自己做。
+ * This route is in proxy.ts's PUBLIC_PATHS (the proxy lets it through), so both checks have
+ * to happen here.
  *
- * 原文照存：不做词形还原、不去重、不归类、不挖空。
- * 那些都是整理阶段的事 —— 捕获阶段任何加工都是在给 3 秒预算加负担。
+ * Stored verbatim: no lemmatisation, no dedupe, no filing, no cloze. All of that belongs to
+ * the drafting stage — any processing at capture time eats into the three-second budget.
  *
- * 唯一的例外是 `split: true` 时按行拆成多条，**只有网页输入框会传这个字段**。
- * 快捷指令不传 → iOS 那条链路的行为一个字节都不变（分享网页时 iOS 传过来的是
- * 「页面文案 + 换行 + URL」，拆开会每次多出一条只有 URL 的垃圾条目）。
+ * The one exception is `split: true`, which splits on newlines; **only the web input box
+ * sends that field**. The Shortcut doesn't → the iOS path's behaviour is byte-for-byte
+ * unchanged (sharing a web page, iOS sends "page text + newline + URL", and splitting that
+ * would produce a junk URL-only item every single time).
  *
- * `category_id` 同样是可选的：网页输入框会传，快捷指令不传。不传就是 null，
- * 审核页遇到 null 退回默认分类 —— 归类仍然不是捕获阶段的必答题。
+ * `category_id` is likewise optional: the web box sends it, the Shortcut doesn't. Absent
+ * means null, and the review page falls back to the default category — filing is still not a
+ * question capture has to answer.
  */
 
 export async function POST(request: Request) {
@@ -62,9 +67,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'body must be JSON' }, { status: 400 });
   }
 
-  // 拆行：逐行 trim、丢掉空行。
-  // 不拆：只去首尾空白 —— 中间的换行要留着，那正是「整段当一条」的意义
-  //（PDF 复制的折行、iOS 分享的「文案 + 换行 + URL」都靠它保持完整）。
+  // Splitting: trim each line, drop the empty ones.
+  // Not splitting: trim only the ends — interior newlines must survive, which is the whole
+  // point of "the whole block is one item" (line wraps copied from a PDF, and iOS's
+  // "text + newline + URL" share, both depend on staying intact).
   const texts = split
     ? rawText.split('\n').map((l) => l.trim()).filter((l) => l.length > 0)
     : [rawText.trim()];

@@ -16,9 +16,10 @@ import {
 } from 'drizzle-orm/pg-core';
 
 /**
- * 核心实体是「我遇到它的那一次」（encounter），不是「单词」。
- * 同一个词在技术文档里遇到一次、在闲聊里遇到一次 = 两条 encounter、两张卡，各带各的原句。
- * 所以 cards 挂在 encounters 上，不挂在 words 上。
+ * The core entity is "the time I ran into it" (an encounter), not "the word".
+ * Meeting the same word once in a technical document and once in small talk = two encounters
+ * and two cards, each with its own original sentence.
+ * That's why cards hang off encounters, not off words.
  */
 
 export const inboxStatus = pgEnum('inbox_status', ['pending', 'processed', 'discarded']);
@@ -27,60 +28,69 @@ const createdAt = () =>
   timestamp('created_at', { withTimezone: true }).notNull().defaultNow();
 
 /**
- * Claude 预处理的产出。**只是草稿** —— 人确认之前不写 words/encounters/cards。
+ * What Claude's preprocessing produces. **A draft only** — nothing is written to
+ * words/encounters/cards until a human confirms.
  *
- * 为什么不直接写库：cards 和 inbox 之间没有外键，复习队列查询排除不掉「还没审核的卡」。
- * 如果 process 直接落库，Claude 切错词的卡会立刻混进复习。
+ * Why not write straight to the database: there is no foreign key between cards and inbox, so
+ * the review-queue query has no way to exclude "cards not yet reviewed". If processing wrote
+ * directly, a card where Claude picked the wrong word would immediately enter review.
  */
 export type Draft = {
-  /** 目标词在句子里的实际形态 */
+  /** The target word's actual surface form in the sentence */
   target: string;
-  /** 词形还原 */
+  /** Lemmatised form */
   lemma: string;
-  /** 中文释义 */
+  /** The Chinese definition */
   definition: string;
-  /** 词性简写，按这句话里的实际用法（`n.` / `v.` / `a.` …）。给不出就空串 */
+  /** Part of speech, abbreviated, for how it's used in *this* sentence
+   *  (`n.` / `v.` / `a.` …). Empty string when it can't be determined */
   pos: string;
   /**
-   * `carve (cave)` 这种写法里括号中的对比词。
+   * The confusables from inside the parentheses of the `carve (cave)` shorthand.
    *
-   * 整理阶段的 prompt **不产出**对比词 —— 那一步是从原文抽字段。
-   * 这里只是把人在捕获时就顺手写下的那几个带到审核页去，省得再敲一遍。
+   * The drafting prompt **does not produce** confusables — that step extracts fields from the
+   * original text. This just carries whatever was typed at capture time through to the review
+   * page, so it doesn't have to be retyped.
    */
   contrasts: string[];
-  /** 手写备注，随确认一起提交。AI 不产出这个字段 */
+  /** A hand-written note, submitted along with the confirmation. The AI never fills this */
   remark: string | null;
-  /** cloze 挖空前的完整句子 */
+  /** The complete sentence, before the cloze blank is cut */
   sentence: string;
-  /** sentence 挖掉目标词，用 ___ 占位 */
+  /** The sentence with the target word replaced by ___ */
   cloze: string;
   /**
-   * true = 这句是 Claude 造的，不是 jimmy 真遇到的语境。
+   * true = Claude invented this sentence; it isn't a context jimmy actually met.
    *
-   * 存进去的是孤立单词时没语境可挖，只能造一句。但造句**不等价于**真实语境 ——
-   * 文档的核心设计说得很清楚，价值来自「我遇到它的那一次」。所以这个标记要一路
-   * 传到审核页显示出来，让人分得清哪些卡有真语境。
+   * When the input is an isolated word there is no context to work from, so a sentence has to
+   * be made up. But an invented sentence is **not equivalent** to a real one — the core design
+   * is explicit that the value comes from "the time I ran into it". So this flag travels all
+   * the way to the review page and is displayed, to keep real contexts distinguishable.
    */
   generated: boolean;
 };
 
 /**
- * 复习队列按分类分开。原来是写死的 work/daily 枚举，现在由人自己增删改。
+ * Review queues are split by category. This used to be a hardcoded work/daily enum; now the
+ * categories are created, renamed, and deleted by hand.
  *
- * **Claude 不碰分类** —— 归类是个人化的判断（同一个词对不同人属于不同场景），
- * 让模型猜只会制造要人回头改的噪音。审核时默认选中 isDefault 那个，要改就点。
+ * **Claude never touches categories** — filing something is a personal judgement (the same
+ * word belongs to different situations for different people), and having the model guess only
+ * creates noise someone has to go back and fix. Review preselects the isDefault one; changing
+ * it is one tap.
  */
 export const categories = pgTable('categories', {
   id: serial('id').primaryKey(),
   name: text('name').notNull(),
-  /** 列表和审核页按钮的顺序 */
+  /** Order in the list and among the review page's buttons */
   sortOrder: integer('sort_order').notNull().default(0),
-  /** 审核页默认选中哪个。全表**恰好一个** true，靠事务保证 */
+  /** Which one the review page preselects. **Exactly one** row is true, held by transaction */
   isDefault: boolean('is_default').notNull().default(false),
   createdAt: createdAt(),
 });
 
-/** 捕获落点。捕获阶段只写 raw_text 和 source，不做任何加工 —— 3 秒结束。 */
+/** Where captures land. Capture writes only raw_text and source, with no processing at
+ *  all — three seconds and done. */
 export const inbox = pgTable(
   'inbox',
   {
@@ -88,14 +98,15 @@ export const inbox = pgTable(
     rawText: text('raw_text').notNull(),
     source: text('source').notNull(),
     status: inboxStatus('status').notNull().default('pending'),
-    /** null = 还没被 Claude 处理过 */
+    /** null = Claude hasn't processed it yet */
     draft: jsonb('draft').$type<Draft>(),
     /**
-     * 存入时就指定的分类。**可空** —— iOS 快捷指令那条链路不传，
-     * 审核页遇到 null 就退回默认分类。
+     * The category chosen at capture time. **Nullable** — the iOS Shortcut path doesn't send
+     * one, and the review page falls back to the default category when it sees null.
      *
-     * `onDelete: 'set null'` 而不是 `restrict`：待办条目挡住删分类太意外了
-     * （词有归属是硬要求，一条还没审核的原始文本没有）。
+     * `onDelete: 'set null'` rather than `restrict`: having a pending item block deleting a
+     * category would be too surprising (a word must belong somewhere; a piece of raw text
+     * that hasn't been reviewed yet need not).
      */
     categoryId: integer('category_id').references(() => categories.id, {
       onDelete: 'set null',
@@ -111,63 +122,73 @@ export const words = pgTable(
     id: bigserial('id', { mode: 'number' }).primaryKey(),
     lemma: text('lemma').notNull(),
     /**
-     * 复习队列按分类分开。
+     * Review queues are split by category.
      *
-     * `onDelete: 'restrict'` 是**故意**的：分类里还有词就不许删，得先把词转走。
-     * 应用层会先查计数给出友好提示，但库层这道也要有 —— 代码出 bug 时，
-     * 词不能跟着分类一起无声消失。
+     * `onDelete: 'restrict'` is **deliberate**: a category holding words can't be deleted;
+     * move the words out first. The application layer checks the count and gives a friendly
+     * message, but this database-level guard has to exist too — when the code has a bug,
+     * words must not disappear silently along with their category.
      */
     categoryId: integer('category_id')
       .notNull()
       .references(() => categories.id, { onDelete: 'restrict' }),
     /**
-     * 对比词：拼写或读音相近、容易记混的词（cursory / cursor / courtesy）。
+     * Confusables: words close enough in spelling or sound to get mixed up
+     * (cursory / cursor / courtesy).
      *
-     * 挂在 word 而不是 encounter 上，因为混淆是词本身的属性，同一个词的多次
-     * encounter 应该共享同一组对比词。
+     * Attached to the word rather than the encounter, because being confusable is a property
+     * of the word itself; every encounter of the same word should share one set.
      *
-     * 两个来源：手动敲，或点「AI 匹配」让 Claude 找形近/音近的词
-     *（`POST /api/words/{id}/contrasts/suggest`）。两者**合并不覆盖** ——
-     * 手动加的是自己栽过跟头才记下的，不能被模型的建议冲掉。
+     * Two sources: typed by hand, or the AI match that asks Claude for look-alikes and
+     * sound-alikes (`POST /api/words/{id}/contrasts/suggest`). The two are **merged, never
+     * overwritten** — a manual entry is something he got wrong himself and wrote down, and
+     * the model's suggestions must not wash it away.
      */
     contrasts: jsonb('contrasts').$type<string[]>().notNull().default([]),
     /**
-     * 手写备注。**纯人工，AI 不碰** —— 和对比词一样，这是只有本人知道的东西：
-     * 这个词为什么难记、在哪儿见过、老板邮件里怎么用的。
+     * A hand-written note. **Human only; the AI never touches it** — like confusables, this is
+     * something only he knows: why this word is hard to remember, where he saw it, how his
+     * boss used it in an email.
      *
-     * 挂在 word 不挂在 encounter：备注是对「这个词」的注解，同一个词的多次
-     * encounter 应该共享它。可空 —— 没写过和写了空串是一回事。
+     * Attached to the word rather than the encounter: a note annotates "this word", and every
+     * encounter of it should share the note. Nullable — never written and written empty are
+     * the same thing.
      *
-     * 叫 remark 不叫 note：`encounters.note` 已经是「释义」了，
-     * 同一个仓库里两个 note 指两样东西，迟早看错。
+     * Named remark rather than note because `encounters.note` already means "definition", and
+     * two `note`s meaning two different things in one repository will eventually be misread.
      */
     remark: text('remark'),
     /**
-     * 手动排序用。初始值按 lemma 字母序回填，所以不拖的话看上去和以前一样。
-     * 新确认的词取所在分类的 `max+1`，落到末尾（默认 0 会排到最前，不对）。
+     * For manual ordering. Backfilled alphabetically by lemma, so without dragging anything it
+     * looks exactly as it did before. A newly confirmed word takes its category's `max+1` and
+     * lands at the end (the default of 0 would put it first, which is wrong).
      */
     sortOrder: integer('sort_order').notNull().default(0),
     /**
-     * 词频指标（Zipf，见 `src/lib/frequency.ts`）。**可空** —— null 是
-     *「SUBTLEX 里没收录」（词组、专名），和「频率为 0」不是一回事。
+     * Word frequency (Zipf, see `src/lib/frequency.ts`). **Nullable** — null means "not listed
+     * in SUBTLEX" (phrases, proper nouns), which is not the same as "frequency zero".
      */
     zipf: real('zipf'),
     /**
-     * 「快速过词」本轮已经标过「认识」，出队。一轮结束时整批置回 false。
+     * Marked Know during this Quick pass round, therefore out of the queue. Reset to false in
+     * bulk when a round ends.
      *
-     * 和 `cards` 的复习进度**完全无关** —— 快速过词是按词频把整个分类刷一遍的
-     * 分拣动作，挖空复习是间隔重复，两套各走各的，互相不写对方的字段。
+     * **Entirely unrelated** to the review progress in `cards` — Quick pass is a triage sweep
+     * through a whole category in frequency order, cloze review is spaced repetition; the two
+     * run independently and never write each other's fields.
      */
     triageDone: boolean('triage_done').notNull().default(false),
     /**
-     * 「快速过词」本轮的队列位置。**null = 不在任何一轮里**。
+     * Position in this Quick pass round's queue. **null = not in any round**.
      *
-     * 开一轮时按词频序打成 1,2,3…（口径同 `/api/words/reorder-by-frequency`）。
-     * 标「不认识」时插到后面第 10、11 位之间 —— 所以是 double precision 不是
-     * integer，整数之间得塞得下值。
+     * Starting a round stamps 1, 2, 3… in frequency order (same ordering as
+     * `/api/words/reorder-by-frequency`). A "Don't know" slots the word between the 10th and
+     * 11th ahead — which is why this is double precision rather than integer: there has to be
+     * room between two consecutive values.
      *
-     * 不复用 `sortOrder`：那是你手动拖出来的顺序，这一轮的队列会被「不认识」
-     * 反复打乱，两者混在一列里，退出这个模式之后词汇页的顺序就毁了。
+     * It does not reuse `sortOrder`: that is the order dragged out by hand, whereas this
+     * queue gets shuffled repeatedly by "Don't know". Sharing one column would destroy the
+     * words page's ordering the moment you left this mode.
      */
     triageOrder: doublePrecision('triage_order'),
     createdAt: createdAt(),
@@ -175,16 +196,17 @@ export const words = pgTable(
   (t) => [
     index('words_lemma_idx').on(t.lemma),
     /*
-     * 「同一个 lemma 在同一分类下只有一条 word」原来只写在注释里，靠应用层
-     * 「先查再插」保证 —— 并发时两个请求会同时查到「不存在」，各插一条。
-     * 批量确认要在一个事务里靠 lemma 把 `RETURNING` 的结果对回去，
-     * 这条唯一性必须是**数据库保证**才成立。
+     * "One word row per lemma per category" used to live only in a comment, enforced by the
+     * application's check-then-insert — under concurrency two requests both see "doesn't
+     * exist" and each insert a row. Bulk confirm matches `RETURNING` results back by lemma
+     * inside one transaction, and that only holds if the uniqueness is **guaranteed by the
+     * database**.
      */
     uniqueIndex('words_lemma_category_idx').on(t.lemma, t.categoryId),
   ],
 );
 
-/** 一个 word 对多个 encounter。 */
+/** One word, many encounters. */
 export const encounters = pgTable(
   'encounters',
   {
@@ -196,11 +218,13 @@ export const encounters = pgTable(
     source: text('source').notNull(),
     note: text('note'),
     /**
-     * 词性，按**这一次的语境**判定（`n.` / `v.` / `a.` …）。
+     * Part of speech, judged from **this particular context** (`n.` / `v.` / `a.` …).
      *
-     * 和 `note` 同一层，都随语境走 —— `tear` 在一句里是 n. 眼泪、另一句里是
-     * v. 撕破。不查词典是因为词典给的是全部义项：221 个词里 57% 有 2 个以上词性，
-     * 贴上去一半以上是噪音。Claude 看得到句子，知道这里用的是哪个。
+     * At the same level as `note`, and like it, it follows the context — `tear` is n. (the
+     * one you cry) in one sentence and v. (to rip) in another. A dictionary isn't used because
+     * a dictionary lists every sense: 57% of the 221 words have two or more parts of speech,
+     * so pasting them all in makes over half of it noise. Claude can see the sentence and
+     * knows which one is in play.
      */
     pos: text('pos'),
     createdAt: createdAt(),
@@ -208,7 +232,8 @@ export const encounters = pgTable(
   (t) => [index('encounters_word_id_idx').on(t.wordId)],
 );
 
-/** 复习卡。cloze = 挖空原句，不是「英文 → 中文」。ease/interval/reps 是 SM-2 的状态。 */
+/** A review card. cloze = the original sentence with a blank, not "English → Chinese".
+ *  ease/interval/reps are SM-2 state. */
 export const cards = pgTable(
   'cards',
   {
@@ -219,41 +244,43 @@ export const cards = pgTable(
     clozeText: text('cloze_text').notNull(),
     due: timestamp('due', { withTimezone: true }).notNull().defaultNow(),
     ease: real('ease').notNull().default(2.5),
-    /** 间隔天数 */
+    /** Interval in days */
     interval: integer('interval').notNull().default(0),
     reps: integer('reps').notNull().default(0),
     createdAt: createdAt(),
   },
   (t) => [
-    // 复习队列按 due 查，这个索引是热路径
+    // The review queue queries by due; this index is on the hot path
     index('cards_due_idx').on(t.due),
     index('cards_encounter_id_idx').on(t.encounterId),
   ],
 );
 
 /**
- * Claude API 的用量记录，一次调用一行。
+ * Claude API usage records, one row per call.
  *
- * SDK 每次响应里都带 `usage`，以前直接丢掉了。落库之后 `/usage` 页面就能按用途和
- * 按天看，**零额外成本、不需要新密钥**。
+ * Every SDK response carries `usage`, which used to be thrown away. Stored, it lets `/usage`
+ * break spend down by purpose and by day at **zero extra cost and with no new API key**.
  *
- * 为什么不按天聚合：行数很小（一天几十次撑死），留着明细才能按用途拆，
- * 以后想加维度也不用改历史数据。
+ * Why not aggregate by day: the row count is tiny (a few dozen a day at most), and keeping the
+ * detail is what makes the per-purpose split possible — and adding a dimension later won't
+ * require rewriting history.
  *
- * 🔴 **不存金额** —— 单价会变，硬编码算出来的「花了多少钱」是假精确。
- * 顺带一提，Anthropic **没有**查余额的接口（Admin API 只有用量和已花费，
- * 而且对个人账号不开放），所以「还剩多少」只能去 Console 看。
+ * 🔴 **Amounts are not stored** — prices change, and a hardcoded "this is what it cost" is
+ * false precision. Related: Anthropic has **no** balance endpoint (the Admin API exposes usage
+ * and spend only, and isn't open to personal accounts), so "what's left" is Console-only.
  */
 export const apiUsage = pgTable(
   'api_usage',
   {
     id: bigserial('id', { mode: 'number' }).primaryKey(),
-    /** 干什么用的：process（整理草稿）/ contrast（AI 匹配对比词） */
+    /** What it was for: process (drafting) / contrast (AI-matched confusables) */
     purpose: text('purpose').notNull(),
     model: text('model').notNull(),
     inputTokens: integer('input_tokens').notNull().default(0),
     outputTokens: integer('output_tokens').notNull().default(0),
-    /** 缓存命中的输入 token —— 计价比普通输入便宜得多，分开记才看得出优化效果 */
+    /** Cache-hit input tokens — priced far below ordinary input, so recording them separately
+     *  is what makes the effect of caching visible */
     cacheReadTokens: integer('cache_read_tokens').notNull().default(0),
     cacheWriteTokens: integer('cache_write_tokens').notNull().default(0),
     createdAt: createdAt(),
@@ -262,14 +289,16 @@ export const apiUsage = pgTable(
 );
 
 /**
- * 全局设置。KV 表，现在只有两行：`model.process` 和 `model.contrast`
- *（两条 AI 路径各用哪个模型，在 `/usage` 页上选，见 `src/lib/models.ts`）。
+ * Global settings. A KV table, currently holding `model.process`, `model.contrast` (which
+ * model each AI path uses, chosen on `/usage`, see `src/lib/models.ts`) and, once edited,
+ * `prompt.process` / `prompt.contrast`.
  *
- * 做成 KV 而不是「一个用途一列」：加第三条 AI 路径、或者以后想把界面上那几个
- * 开关做成跨设备同步，都不用再动 schema。
+ * KV rather than a column per purpose: adding a third AI path, or later syncing some of the
+ * UI toggles across devices, then needs no schema change.
  *
- * 🔴 **迁移里不插默认行**，默认值写在代码里兜底。这样新环境、或者迁移没跑全，
- * AI 调用也不会因为查不到设置而挂掉 —— 一个设置项不该有能力弄挂主流程。
+ * 🔴 **Migrations insert no default rows**; the defaults live in code as a fallback. That way
+ * a fresh environment, or one where migrations didn't all run, still can't take the AI calls
+ * down over a missing setting — one setting should never be able to break the main flow.
  */
 export const settings = pgTable('settings', {
   key: text('key').primaryKey(),

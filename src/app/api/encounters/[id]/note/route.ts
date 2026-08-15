@@ -4,13 +4,14 @@ import { getDb } from '@/db';
 import { encounters } from '@/db/schema';
 
 /**
- * 改一条 encounter 的释义。`PUT /api/encounters/{id}/note` body `{ note: string | null }`
+ * Edit one encounter's definition.
+ * `PUT /api/encounters/{id}/note` body `{ note: string | null }`
  *
- * 释义挂在 **encounter** 不挂在 word —— 同一个词在不同语境下意思可以不一样
- *（brew：`泡；煮（茶、咖啡）` vs `泡（茶）；煮（咖啡）`），所以改的是「这一次遇到」
- * 的释义，不影响同一个词的其它 encounter。
+ * The definition hangs off the **encounter**, not the word — the same word can mean different
+ * things in different contexts (brew: `泡；煮（茶、咖啡）` vs `泡（茶）；煮（咖啡）`), so this
+ * edits the definition for *this* encounter and leaves the word's other encounters alone.
  *
- * 和对比词、备注那两个接口一样是整体替换、幂等。
+ * Like the confusables and note endpoints, it's a whole replacement and idempotent.
  */
 export const dynamic = 'force-dynamic';
 

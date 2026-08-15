@@ -4,23 +4,25 @@ import { getDb } from '@/db';
 import { parseCategoryId } from '@/lib/categories';
 
 /**
- * 按词频重排。`POST /api/words/reorder-by-frequency` body `{ categoryId?: number }`
+ * Reorder by frequency. `POST /api/words/reorder-by-frequency` body `{ categoryId?: number }`
  *
- * 🔴 **作用于整个范围，不是当前页。**
+ * 🔴 **Applies to the whole scope, not the current page.**
  *
- * 原来这件事是前端做的：把列表按 zipf 排好再把 ids 发给 `PUT /api/words/reorder`。
- * 分页之后前端手里只有当前页那 30 个，那样只会排这 30 个 —— 而「按词频重排」
- * 的意思显然是整个分类回到词频序。所以挪到服务端，一条 SQL 排完。
+ * This used to be done in the frontend: sort the list by zipf, then send the ids to
+ * `PUT /api/words/reorder`. Once pagination arrived the frontend only held the current
+ * page's 30, so only those 30 got sorted — while "reorder by frequency" obviously means the
+ * whole category returns to frequency order. Hence it moved to the server, done in one SQL
+ * statement.
  *
- * 排序口径和 `scripts/backfill-zipf.mjs` 一致：常见的在前，未收录的（null）
- * 排最后，同分按字母序保持稳定。
+ * The ordering matches `scripts/backfill-zipf.mjs`: common first, words not in the corpus
+ * (null) last, ties broken stably by alphabetical order.
  */
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as { categoryId?: unknown } | null;
 
-  // 不传 categoryId = 全部；传了就只排那个分类
+  // No categoryId = everything; with one, only that category is reordered
   let categoryId: number | null = null;
   if (body?.categoryId !== undefined && body.categoryId !== null) {
     categoryId = parseCategoryId(body.categoryId);

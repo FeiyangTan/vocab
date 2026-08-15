@@ -24,25 +24,28 @@ type Card = {
 };
 
 /**
- * 复习一场。挖空句 → 翻面看答案 → 四个评分按钮。
+ * One review session. Cloze sentence → flip for the answer → four grading buttons.
  *
- * 每答一张立刻 POST 回服务端再取下一张 —— iOS 上 PWA 后台会被系统清掉，
- * 进度攒在内存里等结束再提交的话，切个 App 回来就没了。
+ * Every answer POSTs back to the server before the next card is fetched — on iOS the system
+ * reaps a backgrounded PWA, and progress held in memory until the end would be gone the moment
+ * you switched apps.
  *
- * 对比词**只在背面显示**：正面是填空题，把相似词摆出来会退化成多选题，
- * 削弱开放回忆的效果。背面的作用是「答完之后提醒你别和 X 搞混」。
+ * Confusables appear **on the back only**: the front is a fill-in-the-blank, and putting
+ * similar words on it degrades that into multiple choice, weakening free recall. Their job on
+ * the back is "now that you've answered, don't mix this up with X".
  */
 export function ReviewSession({
   scope,
   name,
 }: {
-  /** 分类 id 或 `'all'`。直接拼进查询串，所以是字符串不是数字 */
+  /** A category id or `'all'`. Interpolated straight into the query string, hence a string
+   *  rather than a number */
   scope: string;
   name: string;
 }) {
   const [card, setCard] = useState<Card | null>(null);
   const [remaining, setRemaining] = useState(0);
-  /** 对比词 → 中文，跟卡片一起从接口拿 */
+  /** confusable → gloss, fetched together with the card */
   const [glosses, setGlosses] = useState<Record<string, string>>({});
   const [flipped, setFlipped] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -75,7 +78,7 @@ export function ReviewSession({
   async function grade(g: number) {
     if (!card) return;
     const id = card.id;
-    setCard(null); // 立刻切走，避免手快连点同一张
+    setCard(null); // switch away immediately, so fast taps can't grade the same card twice
     await fetch(`/api/review/${id}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -84,11 +87,12 @@ export function ReviewSession({
     await load();
   }
 
-  // 键盘：空格翻面，1–4 评分
+  // Keyboard: space flips, 1–4 grade
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (!card) return;
-      // 正在输入对比词时不要抢键 —— 否则打 "courtesy" 里的字符会误触发评分
+      // Don't steal keys while a confusable is being typed — otherwise the characters in
+      // "courtesy" would trigger grades
       const el = document.activeElement;
       if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) return;
 
@@ -109,7 +113,8 @@ export function ReviewSession({
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col p-4 md:p-8">
       <div className="mb-6 flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-1">
-          {/* 常驻出口 —— 以前只有队列复习完时才有「回队列列表」，中途想换分类没地方点 */}
+          {/* A permanent way out — previously "back to the queue list" only appeared once a
+              queue was finished, leaving nowhere to tap to switch category mid-session */}
           <Button asChild variant="ghost" size="icon-sm" className="-ml-1 shrink-0">
             <Link href="/review" aria-label="Back to queues">
               <ChevronLeft className="size-4" />
@@ -134,13 +139,15 @@ export function ReviewSession({
       ) : (
         <>
           <div className="flex flex-1 flex-col justify-center gap-10">
-            {/* 正面：挖空原句。对比词绝不出现在这里 */}
+            {/* Front: the sentence with the blank. Confusables never appear here */}
             <p className="text-center font-serif text-2xl leading-[1.65]">{card.clozeText}</p>
 
             {flipped ? (
-              /* 纸质风靠留白和发丝线分层，不靠盒子 —— Card 在这里只当布局容器 */
+              /* The paper look layers with whitespace and hairlines rather than boxes — Card
+                 is only a layout container here */
               <Card className="gap-6 border-0 bg-transparent p-0 ring-0">
-                {/* 词本身就是发音按钮，和对比词一致 —— 不再挂单独的喇叭图标 */}
+                {/* The word is itself the speak button, consistent with the confusables —
+                    no separate speaker icon */}
                 <button
                   type="button"
                   aria-label={`Speak ${card.lemma}`}
@@ -168,7 +175,8 @@ export function ReviewSession({
                 />
 
                 <Separator />
-                {/* 原句本身就是发音按钮，和单词、对比词一致 */}
+                {/* The sentence is itself the speak button, consistent with the word and the
+                    confusables */}
                 <button
                   type="button"
                   aria-label="Speak the example"
@@ -178,7 +186,8 @@ export function ReviewSession({
                   {card.rawText}
                 </button>
 
-                {/* 备注放最后 —— 原句是这次遇到它的语境，备注是自己加的注解，压轴 */}
+                {/* The note goes last — the sentence is the context you met it in, the note
+                    is your own annotation, so it closes the card */}
                 <Separator />
                 <RemarkRow
                   wordId={card.wordId}

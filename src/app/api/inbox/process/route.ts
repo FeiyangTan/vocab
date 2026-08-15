@@ -7,9 +7,11 @@ import { draftFromInbox } from '@/lib/claude';
 import { splitContrastSuffix } from '@/lib/contrasts';
 
 /**
- * 整理阶段：取若干条 pending 且还没处理过的，调 Claude 生成草稿写回 draft 列。
+ * The drafting stage: take a few items that are pending and not yet processed, call Claude,
+ * and write the drafts back into the draft column.
  *
- * **不改 status** —— 还是 pending，等审核页确认。写库是确认时才发生的事。
+ * **Does not change status** — they stay pending, awaiting confirmation on the review page.
+ * Writing to the real tables only happens at confirm time.
  */
 
 export async function POST() {
@@ -24,8 +26,9 @@ export async function POST() {
 
   if (rows.length === 0) return NextResponse.json({ processed: 0 });
 
-  // `carve (cave)` 里的括号要在**送给 Claude 之前**剥掉：留着的话它会把
-  // "carve (cave)" 当成原句，cloze 里就带着括号，target 也可能挑错。
+  // The parentheses in `carve (cave)` have to be stripped **before** the text reaches
+  // Claude: left in, it treats "carve (cave)" as the original sentence, the cloze carries
+  // the parentheses, and it may well pick the wrong target.
   const stripped = rows.map((r) => {
     const { text, contrasts } = splitContrastSuffix(r.rawText);
     return { ...r, rawText: text, contrasts };
@@ -43,11 +46,13 @@ export async function POST() {
   let processed = 0;
 
   for (const d of drafts) {
-    // Claude 回填的 id 必须是我们发过去的那批之一，否则丢弃 —— 别让模型的输出决定写哪一行
+    // An id Claude echoes back must be one we sent, otherwise drop it — never let the
+    // model's output decide which row gets written
     if (!wanted.has(d.id)) continue;
     const { id, ...rest } = d;
-    // 对比词和备注都不来自模型（schema 里就没这两个字段），在这儿并进去。
-    // 备注只能人手填，捕获阶段没有它的位置，所以初值一律 null
+    // Neither confusables nor the note come from the model (the schema has no such fields);
+    // they're merged in here. A note can only be written by hand and has no place at capture
+    // time, so it always starts as null
     const draft = { ...rest, contrasts: contrastsById.get(id) ?? [], remark: null };
 
     await db.update(inbox).set({ draft }).where(eq(inbox.id, id));

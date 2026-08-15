@@ -13,7 +13,8 @@ import type { Draft } from '@/db/schema';
 import { CONFIRM_BATCH_SIZE, PROCESS_BATCH_SIZE } from '@/lib/batch';
 import { MAX_REMARK } from '@/lib/remark';
 
-/** 判定为「滑动」的最小横向位移（px）。再小就会被日常的手指抖动误触发 */
+/** The minimum horizontal displacement (px) that counts as a swipe. Any smaller and ordinary
+ *  finger tremor triggers it */
 const SWIPE_THRESHOLD = 60;
 
 export type CategoryOption = { id: number; name: string; isDefault: boolean };
@@ -23,14 +24,14 @@ export type InboxItem = {
   rawText: string;
   source: string;
   draft: Draft | null;
-  /** 存入时就选好的分类，null = 那时没选（快捷指令那条链路） */
+  /** The category chosen at capture time; null = none was chosen (the Shortcut path) */
   categoryId: number | null;
   createdAt: string;
 };
 
 /**
- * 一条一屏。四个字段直接可编辑 —— 「修改」不需要单独一个按钮，
- * 改完按确认就是修改，少一次模式切换。
+ * One item per screen. The four fields are directly editable — "edit" needs no button of its
+ * own; you change something and press Confirm, which saves one mode switch.
  */
 export function ReviewList({
   items,
@@ -41,25 +42,27 @@ export function ReviewList({
   items: InboxItem[];
   unprocessed: number;
   categories: CategoryOption[];
-  /** 顶部「存到」选的那个 —— 确认时就存这里 */
+  /** Whatever the "Save to" control at the top selects — confirming files it there */
   categoryId: number | null;
 }) {
   const router = useRouter();
   /**
-   * 当前审到哪条，记的是 **id 不是下标**。
+   * Which item is being reviewed, tracked by **id, not index**.
    *
-   * 后台整理每完成一批就 `router.refresh()`，列表会在你（jimmy）审核的中途变。
-   * 用下标的话：确认 A 后下标指向 B，刷新时 A 因为变成 processed 从列表里掉出去、
-   * 整体左移一位，同一个下标就指到了 C —— **B 被静默跳过，永远审不到**。
+   * Background drafting calls `router.refresh()` after each batch, so the list changes while
+   * jimmy is mid-review. With an index: confirming A leaves the index pointing at B, then the
+   * refresh drops A from the list (it's now processed), everything shifts left by one, and the
+   * same index now points at C — **B is silently skipped and never reviewed at all**.
    */
   const [currentId, setCurrentId] = useState<number | null>(null);
   const [running, setRunning] = useState(false);
   const [processed, setProcessed] = useState(0);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-  /** 「停止」只对**还没发出去**的批次有效，在途的那批收到才停 */
+  /** Stop only affects batches **not yet sent**; one already in flight finishes first */
   const stopped = useRef(false);
-  /** 「全部确认」点第一次只是上膛，再点才真的写 —— 这一步不可逆，应用里没有撤销 */
+  /** The first tap on "Confirm all" only arms it; the second actually writes — this step is
+   *  irreversible and the app has no undo */
   const [armed, setArmed] = useState(false);
   const [confirming, setConfirming] = useState<{ done: number; total: number } | null>(null);
 
@@ -68,11 +71,13 @@ export function ReviewList({
   const current = items[safeIdx];
 
   /**
-   * id → 改过的字段。**ref 不是 state** —— 每次按键都写，不需要触发重渲染。
+   * id → edited fields. **A ref, not state** — it's written on every keystroke and doesn't need
+   * to trigger a re-render.
    *
-   * 存在这一层是因为 `ReviewCard` 用 `key={id}`，翻页就重新挂载、本地 state 全部重置。
-   * 以前唯一的离开方式是确认或丢弃（走了不回来），无所谓；能左右翻之后，
-   * 「改了第 3 条 → 往后看看 → 翻回来发现改动没了」会天天发生。
+   * This layer exists because `ReviewCard` is keyed by `key={id}`, so paging remounts it and
+   * resets all local state. Previously the only way out was confirm or discard (leave and
+   * never return), which made that harmless; once you can page back and forth, "edit item 3 →
+   * look ahead → come back and the edits are gone" would happen daily.
    */
   const edits = useRef(new Map<number, Draft>());
   const draftOf = (item: InboxItem) => edits.current.get(item.id) ?? item.draft!;
@@ -80,19 +85,21 @@ export function ReviewList({
   function go(delta: number) {
     const next = items[safeIdx + delta];
     if (next) {
-      setArmed(false); // 翻页就下膛，别让上膛状态跟着走到别的卡上
+      setArmed(false); // paging disarms, so the armed state can't follow you to another card
       setCurrentId(next.id);
     }
   }
 
-  // 上了膛没接着按就自动下膛 —— 免得半小时后手滑碰一下就全写了
+  // Disarm automatically if the second press doesn't come — so a stray touch half an hour
+  // later can't write everything
   useEffect(() => {
     if (!armed) return;
     const timer = setTimeout(() => setArmed(false), 5000);
     return () => clearTimeout(timer);
   }, [armed]);
 
-  // ← / → 翻页。光标在输入框里时不抢键 —— 否则在例句里挪光标会翻页
+  // ← / → page. Keys aren't stolen while the caret is in an input — otherwise moving the
+  // caret inside the example sentence would page
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
@@ -105,11 +112,12 @@ export function ReviewList({
     return () => window.removeEventListener('keydown', onKey);
   });
 
-  /** 触摸滑动：左滑下一条、右滑上一条 */
+  /** Touch swipe: left for the next item, right for the previous */
   const touch = useRef<{ x: number; y: number } | null>(null);
 
   function onTouchStart(e: React.TouchEvent) {
-    // 起点落在输入控件上时忽略 —— 那是在选文字 / 操作控件，不是在翻页
+    // Ignore swipes starting on an input control — that's selecting text or operating the
+    // control, not paging
     const el = e.target as HTMLElement;
     if (el.closest('input, textarea, button')) {
       touch.current = null;
@@ -126,14 +134,16 @@ export function ReviewList({
     const t = e.changedTouches[0];
     const dx = t.clientX - start.x;
     const dy = t.clientY - start.y;
-    // 横向位移要够大**且**压过纵向，否则会和竖向滚动打架
+    // The horizontal displacement must be large enough **and** exceed the vertical one, or
+    // this fights with vertical scrolling
     if (Math.abs(dx) < SWIPE_THRESHOLD || Math.abs(dx) <= Math.abs(dy)) return;
     go(dx < 0 ? 1 : -1);
   }
 
   /**
-   * 全部确认。**顺序发，不并发** —— confirm 里是一个事务
-   *（find-or-create word → encounter → card），并发确认同一个 lemma 会创出两条 word。
+   * Confirm all. **Sent sequentially, never concurrently** — confirm runs one transaction
+   * (find-or-create word → encounter → card), and confirming the same lemma concurrently would
+   * create two word rows.
    */
   async function confirmAll() {
     setArmed(false);
@@ -145,7 +155,8 @@ export function ReviewList({
     let skipped = 0;
     let lastError = '';
 
-    // 分块顺序发。逐条发的话每条一个事务、9 个来回，135 条要两分钟
+    // Chunked and sequential. One request per item would mean one transaction and 9 round
+    // trips each, so 135 items would take two minutes
     for (let from = 0; from < items.length; from += CONFIRM_BATCH_SIZE) {
       const chunk = items.slice(from, from + CONFIRM_BATCH_SIZE);
       const response = await fetch('/api/inbox/confirm-batch', {
@@ -164,7 +175,7 @@ export function ReviewList({
 
       if (!response.ok) {
         lastError = data.error ?? 'Failed';
-        break; // 整块是一个事务，失败就是整块没写，没必要继续
+        break; // the chunk is one transaction, so a failure means none of it was written
       }
 
       ok += data.confirmed ?? 0;
@@ -185,13 +196,15 @@ export function ReviewList({
   }
 
   /**
-   * 整理一批或整理到底。
+   * Draft one batch, or keep going to the end.
    *
-   * 「处理全部」也是**一批 10 条顺序发**，不是一次性把 N 条塞给 Claude ——
-   * 分批第一批回来就能开始审，一次性发要等到最后才看得到任何东西。
+   * "Process all" also sends **10 at a time, sequentially**, rather than handing Claude all N
+   * at once — batching means reviewing can start as soon as the first batch returns, whereas
+   * one big call shows nothing until it's all done.
    *
-   * 顺序、不并发：`/api/inbox/process` 是「SELECT 10 行 → 调 Claude → UPDATE」，
-   * 中间没有锁，并发会让两个请求捞到同一批行，白花钱。
+   * Sequential, never concurrent: `/api/inbox/process` is "SELECT 10 rows → call Claude →
+   * UPDATE" with no lock in between, so concurrency would have two requests pick up the same
+   * rows and pay for them twice.
    */
   async function runBatches(all: boolean) {
     stopped.current = false;
@@ -201,7 +214,8 @@ export function ReviewList({
 
     let total = 0;
     let left = unprocessed;
-    // 跑飞防线。正常靠 processed === 0 退出，这个只防「某几行每次都失败」的死循环
+    // A runaway guard. Normal exit is processed === 0; this only catches the infinite loop
+    // where a few rows fail on every attempt
     const maxRounds = Math.ceil(unprocessed / PROCESS_BATCH_SIZE) + 3;
 
     for (let round = 0; round < maxRounds; round++) {
@@ -220,7 +234,7 @@ export function ReviewList({
       total += done;
       left = Math.max(0, left - done);
       setProcessed(total);
-      // 不 await —— 新草稿累积进列表，同时继续发下一批
+      // Not awaited — new drafts accumulate in the list while the next batch goes out
       router.refresh();
 
       if (done === 0 || !all || stopped.current) break;
@@ -272,7 +286,8 @@ export function ReviewList({
                 ? `Process ${PROCESS_BATCH_SIZE}`
                 : `Process ${unprocessed} waiting`}
             </Button>
-            {/* 数量写在按钮上，点下去要花几次 Claude 调用一眼可见，不另做确认弹窗 */}
+            {/* The count is on the button, so how many Claude calls a press costs is visible
+                at a glance — no separate confirmation dialog */}
             {unprocessed > PROCESS_BATCH_SIZE && (
               <Button
                 variant="outline"
@@ -300,7 +315,8 @@ export function ReviewList({
             <span className="text-xs text-muted-foreground">
               {safeIdx + 1} / {items.length}
             </span>
-            {/* 手势在桌面不可发现，得有个看得见的入口 */}
+            {/* The gesture is undiscoverable on desktop, so there has to be a visible
+                control */}
             <div className="flex items-center gap-1">
               <Button
                 size="icon-sm"
@@ -361,12 +377,13 @@ function ReviewCard({
   onDone,
 }: {
   item: InboxItem;
-  /** 已经改过的话是改过的版本，否则是原草稿 —— 由 ReviewList 决定 */
+  /** The edited version if it has been edited, otherwise the original draft — ReviewList
+   *  decides */
   draft: Draft;
   categories: CategoryOption[];
   categoryId: number | null;
   armed: boolean;
-  /** 待确认总数 —— 全部确认按钮上要显示 */
+  /** How many are awaiting confirmation — shown on the Confirm all button */
   total: number;
   confirming: { done: number; total: number } | null;
   onArm: () => void;
@@ -378,14 +395,18 @@ function ReviewCard({
   const [lemma, setLemma] = useState(d.lemma);
   const [definition, setDefinition] = useState(d.definition);
   const [pos, setPos] = useState(d.pos ?? '');
-  // 归类不在这里选，跟着顶部那个总开关走。改开关，这一行立刻变
+  // Filing isn't chosen here; it follows the master control at the top. Change that and this
+  // row updates immediately
   const categoryName = categories.find((c) => c.id === categoryId)?.name ?? null;
   const [sentence, setSentence] = useState(d.sentence ?? item.rawText);
   const [cloze, setCloze] = useState(d.cloze);
-  // 词这时还不存在（确认的事务里才创建），所以只能攒在本地，随确认一起提交。
-  // 初值来自 `carve (cave)` 那种写法里括号中的词 —— 捕获时写过就不用再敲一遍
+  // The word doesn't exist yet (it's created inside the confirm transaction), so this can
+  // only accumulate locally and go out with the confirmation.
+  // The initial value comes from the parentheses of the `carve (cave)` shorthand — written
+  // once at capture time, it needn't be typed again
   const [contrasts, setContrasts] = useState<string[]>(d.contrasts ?? []);
-  // 词这时还不存在，没有 id 可 PUT —— 和对比词一样攒本地，随「确认」一起提交
+  // The word doesn't exist yet, so there's no id to PUT to — like the confusables, this
+  // accumulates locally and goes out with Confirm
   const [remark, setRemark] = useState(d.remark ?? '');
   const [pending, setPending] = useState<'confirm' | 'discard' | null>(null);
   const [error, setError] = useState('');
@@ -405,8 +426,9 @@ function ReviewCard({
   };
 
   /**
-   * 每次改动都往上报一份完整的草稿，`ReviewList` 存进 `edits`。
-   * 翻页时这张卡会被卸载，本地 state 全丢 —— 上报的这份是翻回来时的初值。
+   * Every edit reports a complete draft upward, which `ReviewList` stores in `edits`.
+   * Paging unmounts this card and loses all local state — the reported copy is what seeds it
+   * when you page back.
    */
   function edit<K extends keyof typeof values>(key: K, value: (typeof values)[K]) {
     onEdit({ ...values, [key]: value });
@@ -483,7 +505,8 @@ function ReviewCard({
           </div>
         </div>
 
-        {/* 只读 —— 归类是存入时定的。显示出来是因为「这条进了哪儿」不该是盲区 */}
+        {/* Read-only — filing is decided at capture time. It's displayed because "where did
+            this go" shouldn't be a blind spot */}
         <div>
           <div className="mb-1 text-xs text-muted-foreground">Category</div>
           {categoryName ? (
@@ -497,9 +520,10 @@ function ReviewCard({
           <div className="mb-1 text-xs text-muted-foreground">
             Example
             {/*
-              `generated` 现在覆盖两种情况：整句由 AI 造的（只输入了一个词），
-              以及半截话被 AI 补成了完整句。后者里那半句是他真遇到的，
-              所以不能再说「AI 造的」—— 统一说成「不是你原样遇到的」。
+              `generated` now covers two cases: a sentence invented wholesale by the AI (only a
+              word was entered), and a fragment the AI completed into a sentence. In the second
+              case the fragment is something he really met, so calling it "AI-written" would be
+              wrong — both are phrased as "not what you met verbatim".
             */}
             {d.generated && (
               <span className="ml-2 text-amber-600">⚠ Not exactly what you met — AI completed or wrote it</span>
@@ -575,9 +599,9 @@ function ReviewCard({
           {pending === 'discard' ? '…' : 'Discard'}
         </Button>
         {/*
-          全部确认要点两次：第一次上膛只变文案，第二次才真的写。
-          这一步不可逆地写 N 个词 + N 张卡，应用里没有撤销 ——
-          误点一次的代价远大于多点一次。
+          Confirm all takes two taps: the first only arms it and changes the label, the second
+          actually writes. That step irreversibly creates N words and N cards, and the app has
+          no undo — one accidental press costs far more than one extra press.
         */}
         <Button
           variant={armed ? 'destructive' : 'outline'}
@@ -607,7 +631,8 @@ function Field({
   label,
   value,
   onChange,
-  /** 英文字段（目标词、词形还原）走衬线；中文释义不走 */
+  /** English fields (the target word, the lemma) use the serif; the Chinese definition
+   *  doesn't */
   serif = false,
 }: {
   label: string;

@@ -4,7 +4,8 @@ import { getDb } from '@/db';
 import { cards } from '@/db/schema';
 import { sm2 } from '@/lib/sm2';
 
-/** 提交评分。`POST /api/review/{cardId}` body `{ grade: 0-3 }` → SM-2 更新 due/ease/interval。 */
+/** Submit a grade. `POST /api/review/{cardId}` body `{ grade: 0-3 }` → SM-2 updates
+ *  due/ease/interval. */
 export async function POST(request: Request, ctx: { params: Promise<{ cardId: string }> }) {
   const cardId = Number((await ctx.params).cardId);
   if (!Number.isInteger(cardId)) {

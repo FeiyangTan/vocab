@@ -6,9 +6,10 @@ import { categories } from '@/db/schema';
 import { cleanCategoryName } from '@/lib/categories';
 
 /**
- * 分类的增查。`GET /api/categories` / `POST /api/categories`
+ * Create and list categories. `GET /api/categories` / `POST /api/categories`
  *
- * 列表带每个分类的词数 —— 删除时要靠它决定「能不能直接删」还是「先转移」。
+ * The list carries each category's word count — deletion needs it to decide between
+ * "safe to delete" and "move the words first".
  */
 export const dynamic = 'force-dynamic';
 
@@ -25,8 +26,9 @@ export async function POST(request: Request) {
 
   const db = getDb();
 
-  // 重名在库层没有唯一约束（名字可改，加约束会让改名路径也要处理冲突），
-  // 这里查一次就够 —— 单人应用，不存在并发新建同名的场景。
+  // Duplicate names have no unique constraint at the database level (names are editable, and
+  // a constraint would force the rename path to handle conflicts too), so one check here is
+  // enough — single-user app, there's no concurrent create-same-name scenario.
   const [dup] = await db
     .select({ id: categories.id })
     .from(categories)
@@ -36,12 +38,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: `A category named ${name} already exists` }, { status: 409 });
   }
 
-  // 排在最后。sortOrder 目前只由新建顺序决定，没有拖拽排序
+  // Goes last. sortOrder is currently determined by creation order alone; no drag-to-reorder
   const [{ max }] = await db
     .select({ max: sql<number>`coalesce(max(${categories.sortOrder}), -1)::int` })
     .from(categories);
 
-  // 库里一个分类都没有时，新建的这个就是默认分类，否则审核页没有可选中的初值
+  // With no categories at all, the one being created becomes the default — otherwise the
+  // review page has nothing to preselect
   const [{ count }] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(categories);

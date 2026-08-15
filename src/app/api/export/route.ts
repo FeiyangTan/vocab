@@ -3,10 +3,11 @@ import { getDb } from '@/db';
 import { cards, encounters, inbox, words } from '@/db/schema';
 
 /**
- * 全库导出。走 cookie 鉴权（proxy 默认拦截这条路由）。
+ * Full-database export. Cookie-authenticated (the proxy guards this route by default).
  *
- * 这是备份的**异地那一层** —— Neon 分支快照存在 Neon 内部，Neon 项目本身没了就一起没。
- * 浏览器打开这个地址会直接下载一个 JSON 文件，存到 Mac 上就有了一份 Neon 之外的副本。
+ * This is the **off-site layer** of the backup — Neon branch snapshots live inside Neon, and
+ * go with it if the Neon project does. Opening this URL in a browser downloads a JSON file;
+ * saving it to the Mac gives you a copy that exists outside Neon.
  */
 export const dynamic = 'force-dynamic';
 

@@ -39,18 +39,21 @@ import type { Encounter } from './word-detail';
 
 export type CategoryChip = { id: number; name: string; count: number };
 
-/** 分类 chip 的 droppable id 前缀 —— 和卡片的数字 id 区分开 */
+/** The droppable id prefix for category chips — keeps them distinct from cards' numeric ids */
 const CHIP = 'chip:';
 
 /**
- * 词汇页的 client 外壳：托管「中文可见性」+ 拖拽。
+ * The words page's client shell: it holds gloss visibility and dragging.
  *
- * 中文默认全部隐藏 —— 词汇页因此能当自测用。用 `Set<id>` 而不是
- *「全局布尔 + 每卡例外」：后者在「全局开→单卡关→再全局开」这种序列下要维护
- * 两层状态，容易对不上。一个集合就是唯一真相。**不持久化**，刷新回到默认隐藏。
+ * Glosses are all hidden by default, which is what lets the words page double as self-testing.
+ * It uses a `Set<id>` rather than "a global boolean plus per-card exceptions": the latter has
+ * to maintain two layers of state through a sequence like global-on → one card off → global-on
+ * again, and they drift apart easily. One set is the single source of truth. **Not persisted**
+ * — a refresh returns to hidden.
  *
- * 拖拽两种落点：拖到别的卡上 = 调顺序，拖到顶部的分类 chip 上 = 改分类。
- * 两者都**先乐观更新再发请求，失败回滚**。
+ * Dragging has two kinds of target: onto another card = reorder, onto a category chip at the
+ * top = change category. Both **update optimistically, then send the request, rolling back on
+ * failure**.
  */
 export function WordList({
   words,
@@ -69,11 +72,11 @@ export function WordList({
   chips: CategoryChip[];
   activeCategory: number | null;
   total: number;
-  /** 一条都没有时显示的话 */
+  /** What to show when there's nothing at all */
   empty: string;
-  /** 对比词 → 中文，服务端查好的 */
+  /** confusable → gloss, resolved on the server */
   glosses: Record<string, string>;
-  /** 词 → 美式音标，服务端查好的 */
+  /** word → US phonetics, resolved on the server */
   phonetics: Record<string, string>;
   page: number;
   totalPages: number;
@@ -81,26 +84,32 @@ export function WordList({
   const router = useRouter();
   const [revealed, setRevealed] = useState<Set<number>>(new Set());
   /*
-   * 对比词 hover 出中文要不要显示。**默认开** —— 它得刻意悬停 1.2 秒才出来，
-   * 不像释义那样一进页面就摆在眼前，泄不了题；想连对比词一起自测再关掉。
+   * Whether hovering a confusable reveals its gloss. **On by default** — it takes a deliberate
+   * 1.2-second hover to appear, unlike the definition which would otherwise sit there the
+   * moment the page loads, so it gives nothing away. Turn it off to self-test the confusables
+   * too.
    */
   const [showGlosses, setShowGlosses] = useState(true);
-  /** 音标要不要显示。默认开 —— 它不是「答案」，单词本来就摆在那儿，泄不了题 */
+  /** Whether phonetics are shown. On by default — they aren't "the answer", the word is
+   *  already right there, so they give nothing away */
   const [showPhonetics, setShowPhonetics] = useState(true);
-  /** 展开了详情的卡。和 revealed 同一套：一个集合就是唯一真相，不搞「全局布尔 + 每卡例外」 */
+  /** Which cards have their detail expanded. Same approach as revealed: one set is the single
+   *  source of truth, rather than "a global boolean plus per-card exceptions" */
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [order, setOrder] = useState<Word[]>(words);
   const [dragging, setDragging] = useState<Word | null>(null);
   const [error, setError] = useState('');
 
   /*
-   * 服务端数据变了（翻页、换筛选、保存后的 router.refresh()）就跟着换一批。
+   * When the server data changes (paging, changing the filter, the router.refresh() after a
+   * save), swap in the new batch.
    *
-   * `revealed` / `expanded` **按 id 取交集**，不是一律清空：
-   * - 保存释义/改词之后的 refresh，id 集合没变 → 展开状态原样保留
-   *  （一律清空的话，每次保存卡片都会自己收拢）
-   * - 翻页/换筛选，旧 id 一个都不在了 → 自然等于清空
-   * - 删掉一个词，只有它自己消失，其它卡不受影响
+   * `revealed` / `expanded` are **intersected by id** rather than simply cleared:
+   * - after saving a definition or renaming, the refresh leaves the id set unchanged → the
+   *   expanded state survives (clearing would collapse the card on every save)
+   * - paging or changing the filter leaves none of the old ids → which naturally equals a
+   *   clear
+   * - deleting a word removes only that one, leaving the other cards untouched
    */
   const [serverWords, setServerWords] = useState(words);
   if (serverWords !== words) {
@@ -116,25 +125,28 @@ export function WordList({
   const allExpanded = order.length > 0 && expanded.size === order.length;
 
   const sensors = useSensors(
-    // 不设 distance 的话，手柄上的一次点击也会被当成拖拽起手
+    // Without a distance, a plain click on the handle would register as the start of a drag
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
   /**
-   * 按词频重排当前这批。复用 `PUT /api/words/reorder`，前端排好再发 ids。
+   * Reorder by frequency.
    *
-   * 要这个按钮，是因为「词频当默认顺序」和「能手动拖」本质上有张力：拖过之后
-   * 顺序就是手动的了，新词也只落在末尾。给一个**显式**的「回到词频序」
-   * 比让系统偷偷重排更好 —— 后者会把手动拖的结果无声抹掉。
+   * This button exists because "frequency as the default order" and "draggable by hand" are in
+   * genuine tension: once you've dragged, the order is manual, and new words only land at the
+   * end. An **explicit** "return to frequency order" is better than having the system
+   * silently re-sort — the latter would erase the result of dragging without a word.
    */
   async function sortByFrequency() {
     setError('');
     /*
-     * 🔴 走服务端接口，**排的是整个范围不是当前页**。
+     * 🔴 Goes through the server endpoint, which **sorts the whole scope, not the current
+     * page**.
      *
-     * 以前是前端把 order 按 zipf 排好再发 ids —— 分页之后前端手里只有这 30 个，
-     * 那样只会排当前页，而这个按钮的意思显然是整个分类回到词频序。
+     * This used to sort `order` by zipf in the frontend and send the ids — but after
+     * pagination the frontend only holds these 30, so it would sort the current page alone,
+     * while the button obviously means the whole category returns to frequency order.
      */
     const response = await fetch('/api/words/reorder-by-frequency', {
       method: 'POST',
@@ -161,17 +173,18 @@ export function WordList({
 
     const wordId = Number(active.id);
     /*
-     * 防线：被拖的 id 必须还在当前列表里才动手。
-     * 列表会因为换筛选 / router.refresh() 在拖拽过程中被换掉，拿着一个已经不在
-     * 列表里的 id 去写库，改的就是另一个词 —— 这种错静默且难查。
+     * A guard: only act if the dragged id is still in the current list.
+     * The list can be swapped out mid-drag by a filter change or a router.refresh(), and
+     * writing to the database with an id that has left the list modifies a different word —
+     * a silent error, and a hard one to track down.
      */
     if (!order.some((w) => w.id === wordId)) return;
 
-    // ① 落在分类 chip 上 = 改分类
+    // (1) dropped on a category chip = change category
     if (typeof over.id === 'string' && over.id.startsWith(CHIP)) {
       const categoryId = Number(over.id.slice(CHIP.length));
       const before = order;
-      setOrder((prev) => prev.filter((w) => w.id !== wordId)); // 乐观：从当前列表移走
+      setOrder((prev) => prev.filter((w) => w.id !== wordId)); // optimistic: drop it from the list
       const response = await fetch(`/api/words/${wordId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -179,7 +192,7 @@ export function WordList({
       });
       if (!response.ok) {
         const data = (await response.json().catch(() => ({}))) as { error?: string };
-        setOrder(before); // 回滚
+        setOrder(before); // roll back
         setError(data.error ?? 'Failed to change category');
         return;
       }
@@ -187,7 +200,7 @@ export function WordList({
       return;
     }
 
-    // ② 落在别的卡上 = 调顺序
+    // (2) dropped on another card = reorder
     if (active.id === over.id) return;
     const from = order.findIndex((w) => w.id === wordId);
     const to = order.findIndex((w) => w.id === Number(over.id));
@@ -216,7 +229,7 @@ export function WordList({
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
     >
-      {/* 只有一个分类时没得筛，这排就别占地方 */}
+      {/* With only one category there's nothing to filter, so this row shouldn't take space */}
       {chips.length > 1 && (
         <div className="mb-6 flex flex-wrap items-baseline gap-x-4 gap-y-1.5">
           <FilterChip href="/words" label="All" count={total} active={activeCategory === null} />
@@ -227,7 +240,7 @@ export function WordList({
               label={c.name}
               count={c.count}
               active={activeCategory === c.id}
-              // 拖到「全部」上没有语义，所以只有真正的分类才是放置区
+              // Dropping onto "All" has no meaning, so only real categories are drop targets
               dropId={`${CHIP}${c.id}`}
               dropDisabled={c.id === activeCategory}
             />
@@ -305,7 +318,8 @@ export function WordList({
               key={w.id}
               word={w}
               encounters={encountersByWord[w.id] ?? []}
-              // 关掉时传空对象 —— 没有 gloss 的 chip 根本不套 Tooltip，一处开关全站生效
+              // Switched off, pass an empty object — a chip without a gloss isn't wrapped in
+              // a Tooltip at all, so one toggle covers the whole page
               glosses={showGlosses ? glosses : {}}
               phonetic={showPhonetics ? (phonetics[w.lemma] ?? null) : null}
               revealed={revealed.has(w.id)}
@@ -357,7 +371,8 @@ export function WordList({
         </>
       )}
 
-      {/* 拖动时跟手的那张卡 —— 没有它的话拖起来看不见自己在拖什么 */}
+      {/* The card that follows the pointer while dragging — without it you can't see what
+          you're dragging */}
       <DragOverlay>
         {dragging && (
           <div className="rounded-sm border border-primary bg-card px-3 py-2 shadow-lg">
@@ -369,7 +384,8 @@ export function WordList({
   );
 }
 
-/** 选中态用墨绿文字 + 下方细线，和侧边栏那条竖条同一套语言，不用灰底色块 */
+/** The active state is ink-green text plus a thin underline — the same visual language as the
+ *  sidebar's vertical bar, rather than a grey filled block */
 function FilterChip({
   href,
   label,
@@ -403,7 +419,7 @@ function FilterChip({
       )}
     >
       {label}
-      {/* 数字包成小圆胶囊，和文字拉开层次 */}
+      {/* The count is wrapped in a small pill to separate it from the label */}
       <span
         className={cn(
           'ml-1.5 rounded-full px-1.5 py-px text-[11px] tabular-nums',
@@ -416,7 +432,7 @@ function FilterChip({
   );
 }
 
-/** 翻页保留当前筛选 */
+/** Paging preserves the current filter */
 function pageHref(category: number | null, page: number): string {
   const params = new URLSearchParams();
   if (category) params.set('category', String(category));
@@ -425,7 +441,7 @@ function pageHref(category: number | null, page: number): string {
   return query ? `/words?${query}` : '/words';
 }
 
-/** 用 Link 不用 button —— 保留 URL 语义，前进/后退能用 */
+/** A Link rather than a button — it keeps the URL meaningful, so back/forward work */
 function PageLink({
   href,
   disabled,

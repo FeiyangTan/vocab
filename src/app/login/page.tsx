@@ -21,7 +21,7 @@ export default function LoginPage() {
     });
 
     if (response.ok) {
-      // proxy 重定向过来时带了 ?next=，登录后回到原来想去的页面
+      // The proxy's redirect carries ?next=, so login returns to where you were headed
       const next = new URLSearchParams(window.location.search).get('next');
       window.location.replace(next?.startsWith('/') ? next : '/');
       return;

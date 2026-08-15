@@ -7,13 +7,15 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 
 /**
- * 释义编辑器 + **立刻保存**。用在词汇页展开区。
+ * The definition editor plus **immediate save**. Used in the words page's expanded area.
  *
- * 改的是 **encounter** 的释义，不是词的 —— 同一个词在不同语境下意思可以不一样。
+ * It edits the **encounter's** definition, not the word's — the same word can mean different
+ * things in different contexts.
  *
- * 保存后除了更新本地，还要 `router.refresh()`：这条释义**在两个地方出现**
- *（主卡片那行取的是最近一次 encounter 的释义，展开区里是每条各自的），
- * 只更新本地的话主卡片会停在旧值上。
+ * Besides updating local state, a save must call `router.refresh()`: this definition **appears
+ * in two places** (the main card's row shows the most recent encounter's definition, while the
+ * expanded area shows each one separately), so a local-only update would leave the main card
+ * on the old value.
  */
 export function NoteRow({
   encounterId,
@@ -22,7 +24,8 @@ export function NoteRow({
   onChange,
 }: {
   encounterId: number;
-  /** 词性，和释义同源、按语境判定。只显示不在这儿改（改词性去收集箱审核页） */
+  /** Part of speech — same origin as the definition, judged per context. Shown but not
+   *  editable here (change it on the inbox review page) */
   pos: string | null;
   note: string | null;
   onChange: (next: string | null) => void;

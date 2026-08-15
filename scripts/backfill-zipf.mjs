@@ -1,22 +1,25 @@
 /**
- * 一次性脚本：给已有的词算 `zipf`，并按词频降序重排 `sort_order`。
+ * A one-off script: compute `zipf` for the existing words and re-stamp `sort_order` in
+ * descending frequency.
  *
- * 回填必须走 JS —— 频率表是个 npm 包，SQL 里没有这张表。
+ * The backfill has to run in JS — the frequency table is an npm package, and SQL has no
+ * access to it.
  *
- * **只往 stdout 吐 SQL，自己不连库** —— `@neondatabase/serverless` 在纯 Node
- * 脚本里还要额外配 WebSocket，一次性脚本不值得为它折腾；交给 psql 更省事，
- * 顺便能先看一眼要执行什么。
+ * **It only writes SQL to stdout and never connects to the database** —
+ * `@neondatabase/serverless` needs extra WebSocket setup inside a plain Node script, which
+ * isn't worth the trouble for a one-off; handing it to psql is simpler, and lets you read
+ * what is about to run first.
  *
  *   psql "$DATABASE_URL" -tAc "COPY (SELECT id, lemma FROM words) TO STDOUT WITH CSV" \
  *     | node scripts/backfill-zipf.mjs | psql "$DATABASE_URL"
  *
- * 🔴 会**覆盖 `sort_order`**。跑之前先导出 words 全表快照。
+ * 🔴 This **overwrites `sort_order`**. Export a full snapshot of words before running it.
  */
 import { createRequire } from 'node:module';
 import { createInterface } from 'node:readline';
 
-// 这个包的入口就是一个 .json，ESM 下 import 它要加 import attribute；
-// 用 createRequire 绕开，脚本里更省事
+// This package's entry point is a .json, and importing that under ESM needs an import
+// attribute; createRequire sidesteps it, which is simpler inside a script
 const subtlex = createRequire(import.meta.url)('subtlex-word-frequencies');
 
 let total = 0;
@@ -34,7 +37,8 @@ const zipfOf = (lemma) => {
 const rows = [];
 for await (const line of createInterface({ input: process.stdin })) {
   if (!line.trim()) continue;
-  // CSV：id,lemma —— lemma 里可能有逗号（`remote control` 没有，但保险起见只切第一个）
+  // CSV: id,lemma — a lemma may contain a comma (`remote control` doesn't, but split on the
+  // first one to be safe)
   const at = line.indexOf(',');
   const id = Number(line.slice(0, at));
   let lemma = line.slice(at + 1);
@@ -42,16 +46,16 @@ for await (const line of createInterface({ input: process.stdin })) {
   rows.push({ id, lemma, zipf: zipfOf(lemma) });
 }
 
-// 常见的排前面；未收录的（null）排最后，同分按字母序保持稳定
+// Common words first; those not in the corpus (null) last, ties broken stably by alphabet
 rows.sort((a, b) => (b.zipf ?? -1) - (a.zipf ?? -1) || a.lemma.localeCompare(b.lemma));
 
 const missing = rows.filter((r) => r.zipf === null);
 process.stderr.write(
-  `词总数 ${rows.length}，未收录 ${missing.length}：${missing.map((r) => r.lemma).join(', ')}\n`,
+  `${rows.length} words, ${missing.length} not in the corpus: ${missing.map((r) => r.lemma).join(', ')}\n`,
 );
 process.stderr.write(
-  `前 5：${rows.slice(0, 5).map((r) => `${r.lemma}(${r.zipf})`).join(' ')}\n` +
-    `后 5：${rows.slice(-5).map((r) => `${r.lemma}(${r.zipf})`).join(' ')}\n`,
+  `first 5: ${rows.slice(0, 5).map((r) => `${r.lemma}(${r.zipf})`).join(' ')}\n` +
+    `last 5: ${rows.slice(-5).map((r) => `${r.lemma}(${r.zipf})`).join(' ')}\n`,
 );
 
 const values = rows

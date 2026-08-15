@@ -6,13 +6,14 @@ import { parseScope } from '@/lib/categories';
 import { contrastHintsFor } from '@/lib/dictionary';
 
 /**
- * 取下一张到期的卡。`GET /api/review?category=<id|all>`
+ * Fetch the next due card. `GET /api/review?category=<id|all>`
  *
- * 每次只返回一张 —— iOS 上 PWA 后台会被系统清掉，所以进度必须每答一张就写回服务端，
- * 不能一次拉一整队列放在内存里慢慢消。
+ * One card per request — on iOS the system reaps a backgrounded PWA, so progress has to be
+ * written back to the server after every answer; pulling a whole queue into memory and
+ * working through it is not an option.
  *
- * `all` 只是**放宽取卡范围**（不按分类过滤），排序、评分、排程一个字都没改 ——
- * 到期早的先来，本来就是全局口径。
+ * `all` only **widens which cards are eligible** (no category filter); ordering, grading and
+ * scheduling are untouched — due-first was already a global ordering.
  */
 export const dynamic = 'force-dynamic';
 
@@ -24,7 +25,8 @@ export async function GET(request: Request) {
 
   const db = getDb();
 
-  // 分类可能刚被删掉 —— 不查的话下面两个查询都返回空，前端会显示成「复习完了」
+  // The category may have just been deleted — without this check both queries below return
+  // empty and the frontend renders it as "review finished"
   if (scope !== 'all') {
     const [category] = await db
       .select({ id: categories.id })
@@ -47,7 +49,8 @@ export async function GET(request: Request) {
       note: encounters.note,
       pos: encounters.pos,
       rawText: encounters.rawText,
-      // 前端要 wordId 才能调 PUT /api/words/{id}/contrasts 就地添加对比词
+      // The frontend needs wordId to call PUT /api/words/{id}/contrasts and add a
+      // confusable in place
       wordId: words.id,
       contrasts: words.contrasts,
       remark: words.remark,
@@ -66,7 +69,8 @@ export async function GET(request: Request) {
     .innerJoin(words, eq(encounters.wordId, words.id))
     .where(and(inScope, lte(cards.due, now)));
 
-  // 对比词的中文在服务端查好一起返回 —— 前端不碰那张 2.18MB 的表
+  // Confusable glosses are looked up server-side and returned alongside — the frontend never
+  // touches that 2.18MB table
   return NextResponse.json({
     card: card ?? null,
     remaining,

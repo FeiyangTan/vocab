@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { getDb } from '@/db';
 import { inbox } from '@/db/schema';
 
-/** 丢弃：只改 inbox 状态，words/encounters/cards 一个字都不写。 */
+/** Discard: flips the inbox status only; writes nothing to words/encounters/cards. */
 export async function POST(_request: Request, ctx: { params: Promise<{ id: string }> }) {
   const id = Number((await ctx.params).id);
   if (!Number.isInteger(id)) {

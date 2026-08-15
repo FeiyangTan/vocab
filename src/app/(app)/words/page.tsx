@@ -10,11 +10,11 @@ import { WordList } from './word-list';
 export const dynamic = 'force-dynamic';
 
 /**
- * 筛选走 URL（`?category=<id>`）不走客户端 state：前进/后退能用、刷新不丢、
- * 链接可以存。做成客户端 state 反而要多一个 'use client' 边界，
- * 还得把全部词都送到浏览器再过滤。
+ * The filter lives in the URL (`?category=<id>`) rather than client state: back/forward work,
+ * refresh doesn't lose it, and a link can be saved. As client state it would instead cost a
+ * `'use client'` boundary and require shipping every word to the browser to filter there.
  */
-/** 每页条数。3 列 × 10 行，正好一屏 */
+/** Items per page. 3 columns × 10 rows, which is exactly one screen */
 const PAGE_SIZE = 30;
 
 export default async function WordsPage({
@@ -25,8 +25,8 @@ export default async function WordsPage({
   const cats = await listCategories();
   const params = await searchParams;
 
-  // 分类被删掉之后旧链接还在的话，退回「全部」而不是 404 ——
-  // 一个筛选参数过期不该让整页打不开
+  // When a category has been deleted but an old link survives, fall back to "All" rather than
+  // 404 — one stale filter parameter shouldn't make the whole page unopenable
   const requested = parseCategoryId(params.category);
   const active = cats.some((c) => c.id === requested) ? requested : null;
 
@@ -38,7 +38,8 @@ export default async function WordsPage({
     .where(scope);
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
-  // 页码非法或越界一律落回第 1 页 —— 和 ?category=99 同一条：参数过期不该让整页打不开
+  // An invalid or out-of-range page falls back to page 1 — same rule as ?category=99: a stale
+  // parameter shouldn't make the whole page unopenable
   const wanted = Number(params.page);
   const page = Number.isInteger(wanted) && wanted >= 1 && wanted <= totalPages ? wanted : 1;
 
@@ -50,8 +51,9 @@ export default async function WordsPage({
       contrasts: words.contrasts,
       remark: words.remark,
       zipf: words.zipf,
-      // 释义挂在 encounter 上（同一个词不同语境可以有不同释义），卡片取最近那次。
-      // 卡片上不放释义的话就只剩一个孤零零的单词，看不出什么。
+      // The definition hangs off the encounter (the same word can be defined differently in
+      // different contexts), and the card takes the most recent one. Without a definition the
+      // card would be a lone word, which says nothing.
       note: sql<string | null>`
         (array_agg(${encounters.note} ORDER BY ${encounters.createdAt} DESC)
          FILTER (WHERE ${encounters.note} IS NOT NULL))[1]
@@ -67,14 +69,16 @@ export default async function WordsPage({
     .where(scope)
     .groupBy(words.id, categories.name)
     .orderBy(asc(words.sortOrder), asc(words.lemma))
-    // 分页真正省下来的开销在下面两处：encounters 和 glosses 只查这 30 个词的
+    // Where pagination actually saves work is the two lookups below: encounters and glosses
+    // are fetched for these 30 words only
     .limit(PAGE_SIZE)
     .offset((page - 1) * PAGE_SIZE);
 
   /*
-   * 展开区要的原句和释义，一次全取回来在 JS 里分组。
-   * 全库 225 条 encounter、原句平均 76 字符 —— 整个数据集比一张图片还小，
-   * 做成点开时才请求要多一个接口还有网络延迟，不值得。
+   * The sentences and definitions the expanded area needs, fetched in one go and grouped in JS.
+   * The whole database holds 225 encounters averaging 76 characters — the entire dataset is
+   * smaller than one image, so fetching on expand would cost an extra endpoint plus network
+   * latency for nothing.
    */
   const detail = rows.length
     ? await getDb()
@@ -84,7 +88,8 @@ export default async function WordsPage({
           rawText: encounters.rawText,
           note: encounters.note,
           pos: encounters.pos,
-          // 挖空句用来定位原句里**当初被挖掉的那一段** —— 词在句子里往往是变形的
+          // The cloze locates **the span originally blanked out** inside the sentence — words
+          // there are usually inflected
           clozeText: cards.clozeText,
         })
         .from(encounters)
@@ -106,11 +111,12 @@ export default async function WordsPage({
   }
 
   /*
-   * 对比词的中文在**服务端**查好，只把这一屏用到的那几十条发下去（几百字节）。
-   * 词表本身 2.18MB，绝不能进浏览器。
+   * Confusable glosses are resolved **on the server**, and only the few dozen this screen uses
+   * are sent down (a few hundred bytes). The table itself is 2.18MB and must never reach the
+   * browser.
    */
   const glosses = contrastHintsFor(new Set(rows.flatMap((r) => r.contrasts)));
-  // 音标同理 —— 表在服务端，只把这 30 个词的发下去
+  // Same for phonetics — the table stays server-side and only these 30 words go down
   const phonetics = phoneticsFor(rows.map((r) => r.lemma));
 
   const allCount = cats.reduce((sum, c) => sum + c.wordCount, 0);
@@ -124,7 +130,8 @@ export default async function WordsPage({
         </span>
       </div>
 
-      {/* chip 是拖拽的放置区，得和卡片在同一个 DndContext 里，所以一起交给 WordList */}
+      {/* The chips are drop targets, so they have to share a DndContext with the cards —
+          hence both are handed to WordList together */}
       <WordList
         words={rows}
         encountersByWord={Object.fromEntries(byWord)}

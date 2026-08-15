@@ -8,11 +8,12 @@ import { ReviewSession } from './review-session';
 export const dynamic = 'force-dynamic';
 
 /**
- * 路由用分类 **id** 不用名字：分类名可以是中文（放进 URL 要百分号编码），
- * 而且改名会让已有链接失效。id 稳定，标题再显示名字。
+ * The route uses the category **id** rather than its name: names can be Chinese (which needs
+ * percent-encoding in a URL), and renaming would break existing links. The id is stable, and
+ * the heading shows the name.
  *
- * `/review/all` 也落在这个动态段上 —— 「全部」和一个分类只是取卡范围不同，
- * 没必要为它再开一套页面。
+ * `/review/all` lands on this dynamic segment too — "All" differs from one category only in
+ * which cards are eligible, so it needs no separate page.
  */
 export default async function CategoryReviewPage({
   params,

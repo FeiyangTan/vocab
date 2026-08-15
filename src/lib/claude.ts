@@ -6,22 +6,25 @@ import { supportsEffort } from './models';
 import { buildUserMessage, CALL_PARAMS, OUTPUT_SCHEMA } from './prompts';
 
 /**
- * 两条会调 Claude 的路径。
+ * The two paths that call Claude.
  *
- * 🔴 **提示词不在这个文件里了** —— 全部搬到 `src/lib/prompts.ts`，因为它们现在
- * 可以在 `/usage` 页上改，编辑器（客户端组件）要 import 默认值，而这个文件
- * import 了 `@/db`，客户端碰不得。这里只负责「取当前那一份、发出去」。
+ * 🔴 **The prompts no longer live in this file** — they all moved to `src/lib/prompts.ts`,
+ * because they are now editable on `/usage` and the editor (a client component) needs to
+ * import the defaults, while this file imports `@/db` and so must never reach the client.
+ * All this file does is fetch the current prompt and send it.
  */
 
 /**
- * 把这次调用的 token 数记下来，供 `/usage` 页面统计。
+ * Record this call's token counts for the `/usage` page.
  *
- * 🔴 **记录失败绝不能影响主流程** —— 整理明明成功了，却因为写用量表出错而整体
- * 报错，是本末倒置。所以整段吞掉异常，只在服务端日志里留一条。
+ * 🔴 **A failed recording must never affect the main flow** — drafting succeeded, and having
+ * the whole request fail because writing a usage row errored gets the priorities backwards.
+ * So the exception is swallowed entirely, leaving one line in the server log.
  *
- * 🔴 **`model` 必须由调用方传进来，不能在这里写死。** 两条路径现在各用各的模型
- *（在 `/usage` 页上选，见 `src/lib/models.ts`），写死的话所有调用都会记到同一个
- * 模型名下，那一页按模型分组的花费估算就是错的 —— 而那正是设置这个功能要看的东西。
+ * 🔴 **`model` has to be passed in by the caller, never hardcoded here.** The two paths now
+ * use different models (chosen on `/usage`, see `src/lib/models.ts`); hardcoding would record
+ * every call under one model name, making that page's per-model spend estimate wrong — which
+ * is precisely what the setting exists to let you compare.
  */
 async function record(purpose: string, model: string, usage: Anthropic.Usage | undefined) {
   if (!usage) return;
@@ -42,7 +45,7 @@ async function record(purpose: string, model: string, usage: Anthropic.Usage | u
 export type ProcessInput = {
   id: number;
   rawText: string;
-  /** ios-share / mac / … —— 只是原样带回，模型不用它做判断 */
+  /** ios-share / mac / … — passed through verbatim; the model doesn't act on it */
   source: string;
 };
 
@@ -58,7 +61,8 @@ export async function draftFromInbox(inputs: ProcessInput[]): Promise<ProcessOut
 
   const payload = inputs.map((i) => ({ id: i.id, source: i.source, raw_text: i.rawText }));
 
-  // 每次现查，不缓存 —— 在 /usage 页上改完设置，下一次处理就该用新的模型和提示词
+  // Fetched fresh each time, never cached — change a setting on /usage and the next run
+  // should already use the new model and prompt
   const [model, system] = await Promise.all([getModel('process'), getPrompt('process')]);
   const params = CALL_PARAMS.process;
 
@@ -67,9 +71,9 @@ export async function draftFromInbox(inputs: ProcessInput[]): Promise<ProcessOut
     max_tokens: params.maxTokens,
     system,
     output_config: {
-      // 简单抽取任务，不需要默认的 high。
-      // 🔴 **按模型条件下发** —— 不支持 effort 的模型（Haiku 4.5）传了会直接 400，
-      // 整个调用失败，不是悄悄忽略。
+      // A simple extraction task; the default of high isn't needed.
+      // 🔴 **Sent conditionally per model** — a model that doesn't support effort
+      // (Haiku 4.5) returns 400 outright and the whole call fails; it is not ignored.
       ...(supportsEffort(model) ? { effort: params.effort } : {}),
       format: { type: 'json_schema', schema: OUTPUT_SCHEMA.process },
     },
@@ -95,12 +99,13 @@ export async function draftFromInbox(inputs: ProcessInput[]): Promise<ProcessOut
 }
 
 /**
- * 给一个词找形近/音近的对比词。
+ * Find look-alike / sound-alike confusables for one word.
  *
- * `effort: 'low'` + `max_tokens: 500`（见 `prompts.ts` 的 `CALL_PARAMS`）——
- * 这是「给一个词找几个近似词」，不是抽取整段文本，用整理那边的 medium/8000 是浪费。
+ * `effort: 'low'` + `max_tokens: 500` (see `CALL_PARAMS` in `prompts.ts`) — this is "find a
+ * few similar words for one word", not extraction over a block of text, so the drafting
+ * path's medium/8000 would be waste.
  *
- * 按次计费，所以只在人点按钮时才发，不做自动补全。
+ * Billed per call, so it only fires when someone presses the button; never on autocomplete.
  */
 export async function suggestContrasts(lemma: string): Promise<string[]> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -116,7 +121,7 @@ export async function suggestContrasts(lemma: string): Promise<string[]> {
     max_tokens: params.maxTokens,
     system,
     output_config: {
-      // 同上：不支持 effort 的模型不能传，会 400
+      // As above: a model without effort support must not receive it, or it 400s
       ...(supportsEffort(model) ? { effort: params.effort } : {}),
       format: { type: 'json_schema', schema: OUTPUT_SCHEMA.contrast },
     },

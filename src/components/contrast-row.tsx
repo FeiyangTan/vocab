@@ -6,10 +6,12 @@ import { Button } from '@/components/ui/button';
 import { ContrastEditor } from './contrast-editor';
 
 /**
- * 对比词编辑器 + **立刻保存**。用在词已经存在的地方：复习页背面、词汇列表页。
+ * The confusable editor plus **immediate save**. Used where the word already exists: the back
+ * of a review card, and the words list.
  *
- * 收集箱审核页不能用这个 —— 那时词还没创建，没有 id 可 PUT，
- * 那边直接用 `ContrastEditor` 攒本地 state，随「确认」一起提交。
+ * The inbox review page can't use this — the word doesn't exist yet, so there's no id to PUT
+ * to. That page uses `ContrastEditor` directly, accumulating local state that goes out with
+ * Confirm.
  */
 export function ContrastRow({
   wordId,
@@ -27,14 +29,16 @@ export function ContrastRow({
   const [pending, setPending] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
   const [error, setError] = useState('');
-  /** 「找了但一个都不合适」要说出来，不然点了没反应像是坏了 */
+  /** "Searched, found nothing suitable" has to be said out loud, or the button looks broken */
   const [notice, setNotice] = useState('');
-  /** 新加的词的中文由接口一起返回，叠在服务端传下来的那份上 */
+  /** Glosses for newly added words come back with the response, layered over the set the
+   *  server sent down */
   const [extra, setExtra] = useState<Record<string, string>>({});
 
   /**
-   * 让 Claude 找形近/音近的词直接加进来。**按次计费**，所以只在点按钮时才发，
-   * 不做自动补全（进页面就调 = 每次浏览都在花钱）。
+   * Ask Claude for look-alikes and sound-alikes and add them directly. **Billed per call**, so
+   * it only fires on a button press, never as autocomplete (calling it on page load would mean
+   * paying for every browse).
    */
   async function suggest() {
     setSuggesting(true);
@@ -53,7 +57,7 @@ export function ContrastRow({
       setError(data.error ?? 'Matching failed');
       return;
     }
-    // 服务端已经和已有的取过并集、清洗过，直接用它的结果
+    // The server has already unioned with the existing set and cleaned it, so use its result
     if (data.contrasts) onChange(data.contrasts);
     if (data.glosses) setExtra((prev) => ({ ...prev, ...data.glosses }));
     if (!data.added?.length) {
@@ -78,7 +82,8 @@ export function ContrastRow({
       contrasts?: string[];
       glosses?: Record<string, string>;
     };
-    // 用服务端清洗后的结果，别用本地的 —— trim / 去重 / 上限都在那边
+    // Use the server's cleaned result rather than the local one — trimming, deduping and the
+    // cap all live there
     onChange(data.contrasts ?? next);
     if (data.glosses) setExtra((prev) => ({ ...prev, ...data.glosses }));
   }

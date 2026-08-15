@@ -6,16 +6,18 @@ import type * as React from 'react';
 import { cn } from '@/lib/utils';
 
 /**
- * 用它不用原生 `title`。两者都是「悬停一会儿才弹」，但计时方式完全不同：
+ * Used instead of the native `title`. Both are "hover a moment and it appears", but they time
+ * it completely differently:
  *
- * - 原生 `title`：鼠标**一动就重新计时**，所以得死死停住才弹得出来
- * - Radix：**从进入元素那一刻开始算**，在元素范围内怎么动都不重置
+ * - native `title`: **any pointer movement restarts the timer**, so it only appears if you
+ *   hold dead still
+ * - Radix: **counts from the moment you enter the element**, and moving within it never resets
  *
- * 所以这里可以放心用 1.2 秒的延迟 —— 想看的时候把鼠标放上去等一下就有，
- * 快速扫过不会被一路弹窗打断。
+ * Which is why a 1.2-second delay is safe here — park the pointer and wait a beat when you
+ * want it, and skimming across the page isn't interrupted by a trail of popups.
  *
- * `skipDelayDuration = 0`：Radix 默认在刚关掉一个气泡后的 300ms 内，
- * 移到下一个会**立刻**弹。关掉它，每一个都老老实实等满 1.2 秒。
+ * `skipDelayDuration = 0`: by default Radix shows the next tooltip **immediately** if you move
+ * to it within 300ms of one closing. Turning that off makes every one wait the full 1.2s.
  */
 function TooltipProvider({
   delayDuration = 1200,

@@ -2,56 +2,62 @@ import { sql, type SQL } from 'drizzle-orm';
 import type { Scope } from './categories';
 
 /**
- * 「快速过词」的队列规则。看单词 → 认识 / 不认识 / 删除，把范围内的词刷空为一轮。
+ * Queue rules for Quick pass. See the word → Know / Don't know / Delete; a round ends when
+ * everything in scope has been cleared.
  *
- * 队列**存在服务端**（`words.triage_order` / `words.triage_done`），前端一次只拿
- * 一个词 —— 和挖空复习同一个道理（见 `src/app/api/review/route.ts` 的注释：
- * iOS 上 PWA 后台会被系统清掉，进度不能攒在内存里）。顺带把「刷新不丢进度」
- * 变成白送的：前端根本没有队列可丢。
+ * The queue **lives on the server** (`words.triage_order` / `words.triage_done`) and the
+ * frontend takes one word at a time — same reasoning as cloze review (see the comment in
+ * `src/app/api/review/route.ts`: on iOS the system reaps a backgrounded PWA, so progress
+ * can't be held in memory). "Refresh doesn't lose progress" comes free with it: the frontend
+ * has no queue to lose.
  *
- * 范围（`Scope`）可以是一个分类，也可以是 `'all'`。**一轮的状态是共享的** ——
- * 在 videos 里标过「认识」的词，进「全部」也不会再出现。「本轮已认识」是**词**的
- * 属性，不是「从哪个门进来的」属性。
+ * The scope may be one category or `'all'`. **Round state is shared** — a word marked Know
+ * inside videos won't reappear under "All" either. "Known this round" is a property of the
+ * **word**, not of which door you came in through.
  *
- * 🔴 **这一套完全不碰 `cards`。** 快速过词是按词频把一批词过一遍的分拣动作，
- * 挖空复习是间隔重复，两边各写各的字段。
+ * 🔴 **None of this touches `cards`.** Quick pass is a triage sweep through a batch of words
+ * in frequency order; cloze review is spaced repetition. Each writes its own fields.
  */
 
-/** 标「不认识」时往后挪多少个位置 */
+/** How many places a "Don't know" moves the word back */
 export const PUSH_BACK = 10;
 
-/** scope 的 WHERE 片段。`'all'` 时是恒真，拼进 SQL 里不用到处写 if */
+/** The scope's WHERE fragment. `'all'` is a tautology, so the SQL composes without ifs */
 function within(scope: Scope): SQL {
   return scope === 'all' ? sql`true` : sql`category_id = ${scope}`;
 }
 
 /**
- * 队列位置的口径：**全局词频名次**。
+ * What a queue position means: a **global frequency rank**.
  *
- * 🔴 名次算在**全部词**上，不是算在 scope 内 —— 这是「全部」能工作的前提。
- * 每个分类各自编号 1..N 的话，四个分类合起来时四个 #1 会挤在最前面，就不是
- * 词频序了。算成全局名次之后这个数在哪儿都能比：
- * - 合起来 → `ORDER BY triage_order` 就是全局词频序
- * - 限定到一个分类 → 全局名次的子集，相对顺序仍是该分类的词频序（名次会稀疏，
- *   但没有任何地方依赖它连续）
+ * 🔴 The rank is computed over **all words**, not within the scope — this is what makes "All"
+ * work at all. If each category numbered itself 1..N, combining four categories would bunch
+ * four #1s at the front and the result wouldn't be frequency order. As a global rank the
+ * number is comparable anywhere:
+ * - combined → `ORDER BY triage_order` is global frequency order
+ * - narrowed to one category → a subset of the global ranks, whose relative order is still
+ *   that category's frequency order (the ranks go sparse, but nothing depends on them
+ *   being contiguous)
  *
- * 排序口径和 `POST /api/words/reorder-by-frequency` 一模一样（常见的在前、
- * SUBTLEX 没收录的 null 排最后、同分按字母序稳定）。
+ * The ordering matches `POST /api/words/reorder-by-frequency` exactly (common first, words
+ * SUBTLEX doesn't list sort last as null, ties broken stably by alphabetical order).
  */
 const globalRank = sql`
   SELECT id, row_number() OVER (ORDER BY zipf DESC NULLS LAST, lemma) AS rn FROM words
 `;
 
 /**
- * 给范围内**还没排过位置**的词打上名次，让它们进入当前这一轮。
+ * Stamp a rank on every in-scope word that **has no position yet**, pulling it into the
+ * current round.
  *
- * 每次取词前调一下（`GET /api/triage` 里数出来为 0 就不发这条 SQL）。有两个作用：
- * 1. 第一次进来时把整批词排进队列 —— 所以不用先按个「开始」
- * 2. 轮进行中在收集箱新确认的词能就地入队 —— 你（jimmy）随时在加词，
- *    让它们干等下一轮没道理
+ * Called before each fetch (`GET /api/triage` skips the SQL when the count comes back 0).
+ * It does two things:
+ * 1. On first entry, it queues the whole batch — so there is no "Start" button to press
+ * 2. Mid-round, words newly confirmed from the inbox join the queue in place — jimmy adds
+ *    words constantly, and making them wait for the next round makes no sense
  *
- * **不碰 `triage_done`** —— 已经标过「认识」的词不该被重新拉回队列，那是
- * 「再来一轮」才做的事。
+ * **Leaves `triage_done` alone** — a word already marked Know must not be dragged back into
+ * the queue; that's what "New round" is for.
  */
 export function stampUnqueued(scope: Scope) {
   return sql`
@@ -62,13 +68,14 @@ export function stampUnqueued(scope: Scope) {
 }
 
 /**
- * 「再来一轮」：范围内全部重打名次 + 清掉「认识」。
+ * "New round": re-rank everything in scope and clear the Know flags.
  *
- * 所以**一轮结束就忘干净**，上一轮认识的词下一轮照样出现。这个模式是
- *「把一批词过一遍」，不是长期记忆调度（那是挖空复习的活）。
+ * So **a round forgets completely when it ends** — a word you knew last round comes up again
+ * next round. This mode is "sweep through a batch of words", not long-term memory scheduling
+ * (that's cloze review's job).
  *
- * 🔴 **按 scope 生效**：从某个分类点「再来一轮」只重置那个分类，不能让在
- * videos 点一下把《Hocus and Pocus》132 个词的进度也冲掉。
+ * 🔴 **Scoped**: hitting "New round" from inside a category resets only that category. One
+ * tap in videos must not wipe the 132-word progress in 《Hocus and Pocus》.
  */
 export function resetRound(scope: Scope) {
   return sql`
@@ -79,20 +86,22 @@ export function resetRound(scope: Scope) {
 }
 
 /**
- * 标「不认识」：在队列里退后 `PUSH_BACK` 位。
+ * Mark "Don't know": move back `PUSH_BACK` places in the queue.
  *
- * 不能写成 `triage_order += 10` —— 那是在**值域**上加，和「队列里第几个」不是
- * 一回事（位置值会被反复插队搞出空洞和小数）。真正要做的是找到后面第 10 个和
- * 第 11 个，把自己插到它俩中间，所以 `triage_order` 是 double precision。
+ * This cannot be written as `triage_order += 10` — that adds in the **value space**, which is
+ * not the same as "how many places back" (repeated insertions leave the values full of gaps
+ * and fractions). What's actually needed is to find the 10th and 11th words ahead and slot in
+ * between them, which is why `triage_order` is double precision.
  *
- * 「后面第 10 个」是**在 scope 内**数的：全部模式下跨分类数，分类模式下只在本
- * 分类数。两个都对 —— 各自符合当时屏幕上那个队列。
+ * "The 10th ahead" is counted **within the scope**: across categories in All mode, within the
+ * one category otherwise. Both are correct — each matches the queue that was on screen.
  *
- * 三种情况，靠 COALESCE 依次兜底：
- * 1. 后面 ≥10 个 —— 插到第 10、11 之间（没有第 11 就是第 10 + 1）
- * 2. 后面不足 10 个 —— 放最后（你（jimmy）定的规则）
- * 3. 后面一个都没有 —— **原地不动**。这是规则的直接推论：「不认识」永远不出队，
- *    所以只剩一个词的时候按不认识，下一个还是它。界面上直说，不假装它动了。
+ * Three cases, handled by the COALESCE chain:
+ * 1. ≥10 words ahead — slot between the 10th and 11th (with no 11th, it's the 10th + 1)
+ * 2. fewer than 10 ahead — go last (jimmy's rule)
+ * 3. nothing ahead at all — **stay put**. That follows directly from the rules: "Don't know"
+ *    never leaves the queue, so pressing it on the last remaining word shows the same word
+ *    again. The UI says so plainly rather than pretending it moved.
  */
 export function pushBack(scope: Scope, wordId: number) {
   return sql`

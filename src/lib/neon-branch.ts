@@ -1,16 +1,19 @@
 /**
- * Neon 分支快照。
+ * Neon branch snapshots.
  *
- * Neon 的分支是写时复制的即时快照 —— 建一个几乎不占空间也不花时间，
- * 需要回滚时在 Neon 面板上点几下就能把数据捞回来，比导出 JSON 再手工导回方便得多。
+ * A Neon branch is a copy-on-write instant snapshot — creating one costs almost no space and
+ * no time, and rolling back is a few clicks in the Neon console, far easier than exporting
+ * JSON and importing it back by hand.
  *
- * 防的是：误删数据、写坏数据、超过免费档 6 小时回溯窗口才发现。
- * **不防**：Neon 项目或账号本身没了 —— 那由 /api/export 那一层兜。
+ * Protects against: deleting data by mistake, corrupting data, noticing only after the free
+ * tier's 6-hour restore window has passed.
+ * **Does not protect against**: losing the Neon project or account itself — /api/export
+ * covers that layer.
  */
 
 const API = 'https://console.neon.tech/api/v2';
 
-/** 免费档最多 10 个分支，留两个余量给主分支和临时用途。 */
+/** The free tier allows 10 branches; leave two spare for the primary and ad-hoc use. */
 const KEEP = 8;
 
 const PREFIX = 'backup-';
@@ -20,8 +23,8 @@ type Branch = { id: string; name: string; created_at: string; default?: boolean 
 function config() {
   const key = process.env.NEON_API_KEY;
   const projectId = process.env.NEON_PROJECT_ID;
-  if (!key) throw new Error('NEON_API_KEY 未配置');
-  if (!projectId) throw new Error('NEON_PROJECT_ID 未配置');
+  if (!key) throw new Error('NEON_API_KEY is not configured');
+  if (!projectId) throw new Error('NEON_PROJECT_ID is not configured');
   return { key, projectId };
 }
 
@@ -50,7 +53,7 @@ export async function createSnapshot(now = new Date()) {
     body: JSON.stringify({ branch: { name } }),
   })) as { branch: Branch };
 
-  // 修剪旧快照，别撞上免费档的分支数上限
+  // Prune old snapshots so we don't hit the free tier's branch limit
   const { branches } = (await call(`/projects/${projectId}/branches`)) as { branches: Branch[] };
   const snapshots = branches
     .filter((b) => b.name.startsWith(PREFIX) && !b.default)

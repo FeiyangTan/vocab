@@ -1,14 +1,15 @@
 /**
- * 朗读英文。Web Speech API，浏览器自带，不花钱。
+ * Speak English aloud. Web Speech API — built into the browser, costs nothing.
  *
- * 复习页读 lemma，也读对比词 —— 对比词很多是**读音**相近才容易混，
- * 光看拼写体会不出来，必须能听。
+ * The review page speaks the lemma, and confusables too — a lot of confusables are
+ * confusable because they **sound** alike, which you can't feel from the spelling.
+ * Being able to hear them is the point.
  */
 export function speak(text: string) {
   if (typeof window === 'undefined' || !window.speechSynthesis) return;
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = 'en-US';
-  // 连点两个词时，后一个要能打断前一个
+  // Tapping two words in a row: the second has to cut the first off
   window.speechSynthesis.cancel();
   window.speechSynthesis.speak(utterance);
 }

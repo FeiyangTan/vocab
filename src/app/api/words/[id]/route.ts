@@ -6,12 +6,12 @@ import { parseCategoryId } from '@/lib/categories';
 import { zipfOf } from '@/lib/frequency';
 
 /**
- * 删掉一个词。`DELETE /api/words/{id}`
+ * Delete a word. `DELETE /api/words/{id}`
  *
- * 🔴 **连带删掉它的所有 encounter 和复习卡** —— `encounters.word_id` 和
- * `cards.encounter_id` 的外键都是 `onDelete: cascade`，所以一条 DELETE 就够，
- * 但也意味着这个词的原句、释义、复习进度全没了，**没有撤销**。
- * 界面上因此要求点两次。
+ * 🔴 **Takes all of its encounters and review cards with it** — the foreign keys on
+ * `encounters.word_id` and `cards.encounter_id` are both `onDelete: cascade`, so one DELETE
+ * suffices. It also means the word's original sentences, definitions and review progress are
+ * all gone, with **no undo**. That's why the UI asks for two taps.
  */
 export const dynamic = 'force-dynamic';
 
@@ -33,8 +33,9 @@ export async function DELETE(_request: Request, ctx: { params: Promise<{ id: str
 }
 
 /**
- * drizzle 把原始的 pg 错误包了一层，错误码在 `cause` 链上、**不在字符串里** ——
- * 用 `String(error).includes('23505')` 判断是抓不到的（会漏成 500）。
+ * drizzle wraps the raw pg error, so the error code lives on the `cause` chain and **not in
+ * the string** — testing with `String(error).includes('23505')` never matches (and the case
+ * escapes as a 500).
  */
 function isUniqueViolation(error: unknown): boolean {
   for (let e = error; e; e = (e as { cause?: unknown }).cause) {
@@ -44,13 +45,17 @@ function isUniqueViolation(error: unknown): boolean {
 }
 
 /**
- * 改词或换分类。`PATCH /api/words/{id}` body `{ lemma?: string; categoryId?: number }`
+ * Edit a word or move it to another category.
+ * `PATCH /api/words/{id}` body `{ lemma?: string; categoryId?: number }`
  *
- * 🔴 目标分类里已经有同名的词时**返回 409，不做合并**。合并要决定留哪条释义、
- * 哪些原句、哪张卡的复习进度，是个有损操作 —— 静默做掉最糟。库里就有现成的
- * 案例：`sneak` 同时存在于两个分类。
+ * 🔴 When the destination category already has a word of the same name, this **returns 409
+ * and does not merge**. Merging would mean deciding which definition to keep, which original
+ * sentences, and which card's review progress — a lossy operation, and doing it silently is
+ * the worst version. There's a live example in the database: `sneak` exists in two
+ * categories at once.
  *
- * 落到新分类的**末尾**（取该分类现有的 max+1），不去猜该插在哪儿。
+ * It lands at the **end** of the new category (its current max+1), rather than guessing where
+ * it should be inserted.
  */
 export async function PATCH(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const id = Number((await ctx.params).id);
@@ -75,14 +80,15 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     return NextResponse.json({ error: 'Word not found' }, { status: 404 });
   }
 
-  // ---- 改词 ----
+  // ---- rename ----
   if (body.lemma !== undefined) {
     const lemma = typeof body.lemma === 'string' ? body.lemma.trim().slice(0, 80) : '';
     if (!lemma) {
       return NextResponse.json({ error: 'Word cannot be empty' }, { status: 400 });
     }
     try {
-      // 词频跟着换 —— 不重算的话新词会挂着旧词的 zipf，排序和档位条全是错的
+      // Frequency follows the rename — without recomputing, the new word would carry the old
+      // word's zipf and both the ordering and the band indicator would be wrong
       await db
         .update(words)
         .set({ lemma, zipf: zipfOf(lemma) })
@@ -99,7 +105,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     return NextResponse.json({ ok: true, lemma, zipf: zipfOf(lemma) });
   }
 
-  // ---- 换分类 ----
+  // ---- move to another category ----
   const categoryId = parseCategoryId(body.categoryId);
   if (!categoryId) {
     return NextResponse.json({ error: 'categoryId must be a category id' }, { status: 400 });
@@ -125,7 +131,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       .set({ categoryId, sortOrder: max + 1 })
       .where(eq(words.id, id));
   } catch (error) {
-    // 23505 = unique_violation，撞的是 (lemma, category_id) 那个唯一索引
+    // 23505 = unique_violation, hitting the (lemma, category_id) unique index
     if (isUniqueViolation(error)) {
       return NextResponse.json(
         { error: `${category.name} already has ${word.lemma}` },

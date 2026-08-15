@@ -2,30 +2,34 @@ import data from './dictionary-data.json';
 import { phoneticOf } from './phonetics';
 
 /**
- * 英汉查表 —— 给对比词配一个 hover 就能看到的中文，**不消耗 token**。
+ * English → Chinese lookup — gives each confusable a gloss you can see on hover,
+ * **costing no tokens**.
  *
- * 数据源：**ECDICT**（https://github.com/skywind3000/ECDICT，MIT，77 万词条），
- * 由 `scripts/build-dictionary.mjs` 精简成「词 → 首行释义」的 JSON。
+ * Source: **ECDICT** (https://github.com/skywind3000/ECDICT, MIT, 770k entries), reduced by
+ * `scripts/build-dictionary.mjs` into a "word → first line of the gloss" JSON.
  *
- * 🔴 **只在服务端 import。** 这张表 2.18MB，绝不能进浏览器 —— 页面上实际显示的
- * 对比词就那么几十个，服务端查好、随数据一起发下去就够了（几百字节）。
- * client component 里不许 import 这个文件。
+ * 🔴 **Server-side import only.** The table is 2.18MB and must never reach the browser — a
+ * page only ever shows a few dozen confusables, so looking them up on the server and sending
+ * the results down with the data is enough (a few hundred bytes). Never import this file
+ * from a client component.
  */
 const table = data as Record<string, string>;
 
-/** 查不到返回 null —— 界面上就不给 tooltip，不显示空气泡 */
+/** null when not found — the UI then skips the tooltip rather than popping an empty one */
 export function glossOf(word: string): string | null {
   return table[word.trim().toLowerCase()] ?? null;
 }
 
 /**
- * 对比词 hover 时显示的一行：**美式音标 + 中文**，例如 `/ˈɔltɚ/ v. 改变`。
+ * The single line shown when hovering a confusable: **US phonetics + Chinese gloss**,
+ * e.g. `/ˈɔltɚ/ v. 改变`.
  *
- * 两个都查不到就不收进结果 —— 前端拿不到值就不套 Tooltip，不弹空气泡。
- * 只有一个的时候就只给那一个，不留空占位。
+ * A word with neither is left out of the result — with no value the frontend skips the
+ * Tooltip instead of popping an empty one. With only one of the two, just that one is used;
+ * no empty placeholder.
  *
- * 返回普通对象而不是 Map：它要跨越 server → client 边界随 props 序列化，
- * Map 传不过去。
+ * Returns a plain object rather than a Map: it has to serialise across the server → client
+ * boundary as props, and a Map doesn't survive that.
  */
 export function contrastHintsFor(words: Iterable<string>): Record<string, string> {
   const out: Record<string, string> = {};
@@ -39,11 +43,16 @@ export function contrastHintsFor(words: Iterable<string>): Record<string, string
 }
 
 /**
- * 看着像不像一个正经的英文词。
+ * Does this look like a genuine English word?
  *
- * 同音词是从音标表机械算出来的，会捞到一些不该当对比词的东西：
- * `pour → por`（西班牙语，字幕语料里有）、`bare → bache`（人名）。
- * ECDICT 的释义自带标记，拿它们筛掉这一类。
+ * Homophones are derived mechanically from the phonetics table, which drags in things that
+ * have no business being confusables: `pour → por` (Spanish, present in the subtitle corpus),
+ * `bare → bache` (a personal name). ECDICT's glosses carry markers for exactly these, so
+ * filter on them.
+ *
+ * 🔴 The Chinese in the regex below is **not translatable** — it matches ECDICT's own gloss
+ * text (人名 = personal name, 姓氏 = surname, 地名 = place name, 省名 = province,
+ * 城市 = city). Translating it silently disables the filter.
  */
 export function looksLikeRealWord(word: string): boolean {
   const gloss = glossOf(word);

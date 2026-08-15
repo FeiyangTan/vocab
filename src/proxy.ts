@@ -3,25 +3,28 @@ import type { NextRequest } from 'next/server';
 import { COOKIE_NAME, isValidSession } from '@/lib/auth';
 
 /**
- * Next 16 里 `middleware.ts` 已废弃改名为 `proxy.ts`，导出函数名必须是 `proxy`。
- * 默认跑 Node.js runtime，且不能设 runtime 配置。
+ * In Next 16, `middleware.ts` is deprecated and renamed to `proxy.ts`, and the exported
+ * function must be called `proxy`. It runs on the Node.js runtime by default, and the runtime
+ * cannot be configured.
  */
 
 /**
- * 不需要登录态的路径。/api/inbox 走 token 校验（在路由里做），不走 cookie。
+ * Paths that need no session. /api/inbox authenticates by token (checked inside the route),
+ * not by cookie.
  *
- * ⚠️ **精确匹配，不是前缀匹配。** 用前缀的话 `/api/inbox` 会连带放行
- * `/api/inbox/process` 和 `/api/inbox/{id}/confirm` —— 那两个是要登录的。
+ * ⚠️ **Exact match, not prefix match.** With a prefix, `/api/inbox` would also let through
+ * `/api/inbox/process` and `/api/inbox/{id}/confirm` — both of which require login.
  */
 const PUBLIC_PATHS = new Set([
   '/login',
   '/api/login',
   '/api/inbox',
-  // PWA 图标：路由形式没有文件后缀，落不进下面 matcher 的图片排除规则，
-  // 不放行的话 iOS「添加到主屏」抓图标会被重定向到登录页
+  // PWA icons: as routes they have no file extension, so they don't hit the image exclusion
+  // in the matcher below. Without these, iOS "Add to Home Screen" fetches the icon and gets
+  // redirected to the login page
   '/icon',
   '/apple-icon',
-  // Vercel Cron 带不了登录 cookie，这条路由自己校验 Bearer $CRON_SECRET
+  // Vercel Cron can't carry a login cookie; this route checks Bearer $CRON_SECRET itself
   '/api/cron/backup',
 ]);
 
@@ -38,7 +41,8 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // API 请求返回 401，不要重定向到登录页 —— 否则调用方拿到的是一坨 HTML
+  // API requests get a 401, never a redirect to the login page — otherwise the caller
+  // receives a blob of HTML
   if (pathname.startsWith('/api/')) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
@@ -51,7 +55,7 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // 排除静态资源，否则 CSS/JS/图片会被一起挡掉
+  // Exclude static assets, or CSS/JS/images get blocked along with everything else
   matcher: [
     '/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|.*\\.(?:png|jpg|jpeg|gif|svg|ico|webp|woff2?)$).*)',
   ],

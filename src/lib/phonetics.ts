@@ -1,22 +1,25 @@
 import data from './phonetics-data.json';
 
 /**
- * 美式音标（IPA）—— 由 `scripts/build-phonetics.mjs` 从 **CMUdict** 生成。
+ * US phonetics (IPA) — generated from **CMUdict** by `scripts/build-phonetics.mjs`.
  *
- * 🔴 **只在服务端 import。** 这张表约 1MB，和中文查表一样绝不能进浏览器：
- * 页面上实际显示的就当前那 30 个词，服务端查好随数据发下去就够了。
+ * 🔴 **Server-side import only.** This table is about 1MB and, like the Chinese gloss table,
+ * must never reach the browser: a page only ever shows the ~30 words currently on screen,
+ * so looking them up on the server and sending the results down is enough.
  *
- * 为什么不用 ECDICT 的 `phonetic`：那是**英式**的（`car → kɑ:`、`better → 'betә`，
- * 都没有儿化的 r）。覆盖率虽高，但拿英式冒充美式是错的。
+ * Why not ECDICT's `phonetic`: that one is **British** (`car → kɑ:`, `better → 'betә`, no
+ * rhotic r). Coverage is good, but passing British off as American is simply wrong.
  */
 const table = data as Record<string, string>;
 
-/** 查不到返回 null —— CMUdict 收词约 92.8%，词组和生僻词会漏，不拿英式凑数 */
+/** null when not found — CMUdict covers about 92.8%; phrases and rare words fall through,
+ *  and British phonetics are not an acceptable substitute */
 export function phoneticOf(word: string): string | null {
   return table[word.trim().toLowerCase()] ?? null;
 }
 
-/** 批量查，只返回查得到的。普通对象而非 Map —— 要跨 server → client 序列化 */
+/** Bulk lookup, returning only what was found. A plain object rather than a Map — it has to
+ *  serialise across the server → client boundary */
 export function phoneticsFor(words: Iterable<string>): Record<string, string> {
   const out: Record<string, string> = {};
   for (const word of words) {
@@ -27,10 +30,11 @@ export function phoneticsFor(words: Iterable<string>): Record<string, string> {
 }
 
 /**
- * IPA → 同音词组。懒建一次，和主表共用同一份数据。
+ * IPA → homophone group. Built lazily once, over the same data as the main table.
  *
- * 「同音词」在这里的定义是**音标完全相同** —— 精确、可枚举，不用求模型去回忆。
- * AI 那条路会漏（模型不一定想得起 `flee/flea`），这条不会。
+ * "Homophone" here means **identical phonetics** — exact and enumerable, no need to ask a
+ * model to recall them. The AI path misses some (it won't always think of `flee/flea`);
+ * this one doesn't.
  */
 let homophones: Map<string, string[]> | null = null;
 

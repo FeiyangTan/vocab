@@ -3,12 +3,13 @@ import { getDb } from '@/db';
 import { categories, words } from '@/db/schema';
 
 /**
- * 分类列表 + 每个分类的词数。
+ * The category list plus each category's word count.
  *
- * **服务端专用**（导入了 db client，别在 client component 里 import）。
- * 放在这里而不是路由文件里：Next 会严格校验 route 的导出，路由文件只能导出
- * HTTP 方法和配置。这个查询被 `GET /api/categories` 和四个页面共用，
- * 抽出来是为了删除时「能不能直接删」的口径只有一处。
+ * **Server-only** (it imports the db client; never import it from a client component).
+ * It lives here rather than in a route file because Next validates route exports strictly —
+ * a route file may only export HTTP methods and config. This query is shared by
+ * `GET /api/categories` and four pages; extracting it keeps "is this safe to delete" defined
+ * in exactly one place.
  */
 export async function listCategories() {
   return getDb()

@@ -3,10 +3,10 @@ import { safeEqual } from '@/lib/auth';
 import { createSnapshot } from '@/lib/neon-branch';
 
 /**
- * 每周备份。由 Vercel Cron 触发（见 vercel.json）。
+ * The weekly backup, triggered by Vercel Cron (see vercel.json).
  *
- * Cron 请求带不了登录 cookie，所以这条路由在 proxy 的 PUBLIC_PATHS 里，
- * 自己校验 Vercel 注入的 `Authorization: Bearer $CRON_SECRET`。
+ * A Cron request can't carry a login cookie, so this route sits in the proxy's PUBLIC_PATHS
+ * and checks the `Authorization: Bearer $CRON_SECRET` header Vercel injects itself.
  */
 export const dynamic = 'force-dynamic';
 

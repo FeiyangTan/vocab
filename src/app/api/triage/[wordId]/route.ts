@@ -6,19 +6,20 @@ import { parseScope } from '@/lib/categories';
 import { pushBack } from '@/lib/triage';
 
 /**
- * 「快速过词」记一个判断。
+ * Quick pass: record one judgement.
  * `POST /api/triage/{wordId}` body `{ action: 'known' | 'unknown', scope: <id|'all'> }`
  *
- * - `known` → 本轮出队
- * - `unknown` → 在队列里退后 10 位（规则见 `src/lib/triage.ts`）
+ * - `known` → out of the queue for this round
+ * - `unknown` → back 10 places in the queue (rules in `src/lib/triage.ts`)
  *
- * `scope` 是**当时屏幕上那个队列**的范围，`unknown` 要用它数「后面第 10 个」——
- * 在「全部」里退 10 位和在一个分类里退 10 位落点不一样，两个都对。
+ * `scope` is the scope of **the queue that was on screen**, which `unknown` needs in order to
+ * count "the 10th ahead" — going back 10 within All and within one category land in different
+ * places, and both are correct.
  *
- * **「删除」不在这儿** —— 直接用已有的 `DELETE /api/words/{id}`，
- * 它已经级联删掉 encounters 和复习卡了，没必要再造一个入口。
+ * **Delete is not here** — the existing `DELETE /api/words/{id}` already cascades to
+ * encounters and review cards, so there's no reason to build a second entry point.
  *
- * 🔴 两个动作都**不碰 `cards`**：快速过词不改复习计划。
+ * 🔴 Neither action **touches `cards`**: Quick pass never alters the review schedule.
  */
 export const dynamic = 'force-dynamic';
 
@@ -54,10 +55,12 @@ export async function POST(request: Request, ctx: { params: Promise<{ wordId: st
     return NextResponse.json({ ok: true });
   }
 
-  // 没传 scope 就退回这个词自己的分类 —— 比拿 'all' 兜底安全：
-  // 猜大了会跨分类数出一个和屏幕上不一致的落点
+  // With no scope supplied, fall back to the word's own category — safer than defaulting to
+  // 'all': guessing too wide counts across categories and lands somewhere that doesn't match
+  // what was on screen
   const scope = parseScope(body?.scope) ?? word.categoryId;
-  // 没排过位置说明它还没进队列（正常路径下 GET 已经排过了），排位置是 GET 的活
+  // No position means it never entered the queue (on the normal path GET has already stamped
+  // it); stamping is GET's job
   if (word.triageOrder === null) {
     return NextResponse.json({ error: 'This word is not in the queue yet' }, { status: 409 });
   }

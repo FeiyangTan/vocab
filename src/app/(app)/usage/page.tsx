@@ -9,20 +9,22 @@ import { PromptEditor } from './prompt-editor';
 
 export const dynamic = 'force-dynamic';
 
-/** 用途的中文名和 `src/lib/models.ts` 共用一份 —— 两处各写一份迟早对不上 */
+/** Purpose labels are shared with `src/lib/models.ts` — two copies would drift apart */
 const labelOf = (purpose: string) =>
   (PURPOSE_LABEL as Record<string, string>)[purpose] ?? purpose;
 
 /**
- * Claude API 用量 + 花费估算。
+ * Claude API usage plus estimated spend.
  *
- * 🔴 金额是**按 `src/lib/pricing.ts` 的单价表估算的，不是账单** ——
- * 没算 batch 折扣、data residency 溢价、web search 按次收费这些。准确金额去 Console。
+ * 🔴 Amounts are **estimated from the price table in `src/lib/pricing.ts`, and are not a
+ * bill** — batch discounts, the data-residency premium, and per-search web-search billing are
+ * all unaccounted for. For exact amounts, use the Console.
  *
- * 也**没有「剩余额度」** —— Anthropic 的 Admin API 只有用量和已花费两个端点，
- * 没有查余额的接口（而且它对个人账号还不开放）。余额只在 Console 页面上看得到。
+ * There is also **no "balance remaining"** — Anthropic's Admin API exposes usage and spend
+ * only, with no balance endpoint (and it isn't open to personal accounts anyway). The balance
+ * is visible on the Console page and nowhere else.
  *
- * 记录从加上这个功能那天开始，之前的调用补不回来。
+ * Recording starts the day this feature was added; earlier calls can't be recovered.
  */
 export default async function UsagePage() {
   const db = getDb();
@@ -37,7 +39,8 @@ export default async function UsagePage() {
   };
 
   const [total] = await db.select(sums).from(apiUsage);
-  // 和下面按天分组用同一个时区口径，否则会出现「开始记录于 8/6、柱子却是 8/7」
+  // Same timezone basis as the per-day grouping below, or you get "recording since 8/6"
+  // above a first bar labelled 8/7
   const [first] = await db
     .select({
       day: sql<string>`to_char(min(${apiUsage.createdAt}) AT TIME ZONE 'UTC', 'YYYY/MM/DD')`,
@@ -50,7 +53,8 @@ export default async function UsagePage() {
     .groupBy(apiUsage.purpose)
     .orderBy(desc(sums.input));
 
-  // 花费按**模型**分开算 —— 不同模型单价差好几倍，混在一起算没法算
+  // Spend is computed per **model** — prices differ several-fold, so a combined figure is
+  // meaningless
   const byModel = await db
     .select({ model: apiUsage.model, ...sums })
     .from(apiUsage)
@@ -84,10 +88,12 @@ export default async function UsagePage() {
       </div>
 
       {/*
-        模型和提示词放最前，而且**在「还没有记录」的分支外面** —— 它们是设置不是
-        统计，一次都没调用过的时候更应该能先把模型和提示词定下来。
+        The model and prompts come first, and sit **outside the "nothing recorded yet" branch**
+        — they are settings, not statistics, and having made no calls at all is exactly when
+        you most want to set them.
 
-        顺序是「用哪个模型 → 发什么指令 → 花了多少」：前两个是因，第三个是果。
+        The order is "which model → what instructions → what it cost": the first two are the
+        cause, the third the effect.
       */}
       <div className="mb-8 space-y-8">
         <ModelPicker current={models} />
@@ -177,7 +183,7 @@ export default async function UsagePage() {
                   <span className="w-12 shrink-0 text-muted-foreground tabular-nums">
                     {row.day}
                   </span>
-                  {/* 纯 CSS 宽度百分比，不为一个柱状图引一整个图表库 */}
+                  {/* A plain CSS width percentage — no charting library for one bar */}
                   <span
                     className="h-2 shrink-0 rounded-px bg-primary/60"
                     style={{ width: `${((row.input + row.output) / peak) * 60}%` }}

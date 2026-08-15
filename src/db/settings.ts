@@ -11,25 +11,28 @@ import {
 import { DEFAULT_PROMPT, validatePrompt } from '@/lib/prompts';
 
 /**
- * `settings` 表的读写。
+ * Reads and writes for the `settings` table.
  *
- * 🔴 **和 `src/lib/models.ts` 分开是刻意的**：那边的名单和校验函数要被 `/usage`
- * 页那个 `'use client'` 选择器 import，所以必须不碰数据库。这些函数一 import
- * `@/db`，drizzle 和 Neon 驱动就会被打进浏览器包 —— 实测会让 Vercel 构建失败
- *（本地 `next build` 反而能过，所以只看本地构建是发现不了的）。
+ * 🔴 **The split from `src/lib/models.ts` is deliberate**: the list and validators over there
+ * are imported by the `'use client'` picker on `/usage`, so they must not touch the database.
+ * The moment these functions import `@/db`, drizzle and the Neon driver get bundled into the
+ * browser — measured, that fails the Vercel build (local `next build` passes, so looking only
+ * at local builds will not catch it).
  */
 
 const keyOf = (purpose: Purpose) => `model.${purpose}`;
 
 /**
- * 取某条路径当前用的模型。
+ * The model currently in use for one path.
  *
- * 🔴 **查不到、或者库里的值不在白名单里，一律退回默认** —— 设置表被写脏
- *（手工改库、白名单缩了、表还没建）不该让 AI 调用挂掉。一个设置项不该有
- * 能力弄挂主流程。
+ * 🔴 **Missing row, or a value outside the allow-list, always falls back to the default** — a
+ * dirty settings table (edited by hand, an allow-list that shrank, a table not yet created)
+ * must not take the AI calls down with it. One setting should never be able to break the
+ * main flow.
  *
- * **不做缓存**：每次调用前多一次约 50ms 的查询，而 AI 调用本身要几秒，
- * 这点开销无所谓；加了缓存就会出现「刚在页面上改完但没生效」这种最难解释的 bug。
+ * **No caching**: one extra ~50ms query before a call that itself takes seconds is
+ * irrelevant, whereas a cache produces "I just changed it on the page and nothing happened",
+ * which is the hardest kind of bug to explain.
  */
 export async function getModel(purpose: Purpose): Promise<ModelId> {
   try {
@@ -45,7 +48,7 @@ export async function getModel(purpose: Purpose): Promise<ModelId> {
   }
 }
 
-/** 一次把两条路径的当前模型都取回来，给 `/usage` 页渲染用 */
+/** Fetch both paths' current models at once, for rendering `/usage` */
 export async function getAllModels(): Promise<Record<Purpose, ModelId>> {
   const entries = await Promise.all(
     PURPOSES.map(async (p) => [p, await getModel(p)] as const),
@@ -63,30 +66,33 @@ export async function setModel(purpose: Purpose, model: ModelId): Promise<void> 
     });
 }
 
-/* ---------------------------------------------------------------- 提示词 */
+/* ---------------------------------------------------------------- prompts */
 
 const promptKeyOf = (purpose: Purpose) => `prompt.${purpose}`;
 
 /**
- * 取某条路径当前用的 system prompt。
+ * The system prompt currently in use for one path.
  *
- * 和 `getModel` 一样的兜底哲学：**查不到、或者库里存的是空/超长的脏值，
- * 一律退回代码里的默认值**。提示词是每次调用都要发的东西，
- * 它坏了整条 AI 路径就废了 —— 一个设置项不该有能力弄挂主流程。
+ * Same fallback philosophy as `getModel`: **a missing row, or a dirty stored value (empty or
+ * over-long), always falls back to the default in code**. The prompt is sent on every single
+ * call, so if it's broken the whole AI path is dead — and one setting should never be able to
+ * break the main flow.
  *
- * 同样**不缓存**：AI 调用本身几秒起步，多这一次约 50ms 的查询无所谓；
- * 加了缓存就会出现「刚在页面上改完提示词但没生效」这种最难解释的 bug。
+ * **Also uncached**: an AI call takes seconds to begin with, so one extra ~50ms query is
+ * irrelevant, whereas a cache produces "I just edited the prompt and nothing happened",
+ * the hardest kind of bug to explain.
  */
 export async function getPrompt(purpose: Purpose): Promise<string> {
   return (await readOverride(purpose)) ?? DEFAULT_PROMPT[purpose];
 }
 
 /**
- * `/usage` 页渲染用：每条路径的当前提示词 + **它是不是被改过**。
+ * For rendering `/usage`: each path's current prompt plus **whether it has been edited**.
  *
- * `customized` 看的是**库里有没有那一行**，不是「文本和默认值一不一样」——
- * 他完全可能把内容手工改回和默认一模一样再存一次，那时「恢复默认」仍然该是亮的：
- * 库里那一行还在，以后代码里的默认提示词一改，这条不会跟上。
+ * `customized` reflects **whether the row exists**, not whether the text differs from the
+ * default — he could perfectly well edit the text back to character-for-character the default
+ * and save it again, and "Reset to default" should still be lit: the row is still there, and
+ * when the default prompt changes in code, that path will not follow.
  */
 export async function getAllPrompts(): Promise<
   Record<Purpose, { text: string; customized: boolean }>
@@ -100,7 +106,7 @@ export async function getAllPrompts(): Promise<
   return Object.fromEntries(entries) as Record<Purpose, { text: string; customized: boolean }>;
 }
 
-/** 库里那份自定义提示词；没有、或者是脏值，都当没有 */
+/** The custom prompt stored in the database; absent or dirty both count as absent */
 async function readOverride(purpose: Purpose): Promise<string | null> {
   try {
     const [row] = await getDb()
@@ -117,11 +123,12 @@ async function readOverride(purpose: Purpose): Promise<string | null> {
 }
 
 /**
- * 存一份自定义提示词，`null` = **恢复默认**。
+ * Store a custom prompt; `null` = **reset to default**.
  *
- * 🔴 恢复默认是**删掉那一行，而不是把默认文本写进库**。写进去的话，
- * 以后我在 `prompts.ts` 里改进了默认提示词，这条会被那份旧快照挡住 ——
- * 而且从页面上完全看不出来「你以为在用默认，其实用的是三个月前的默认」。
+ * 🔴 Resetting **deletes the row rather than writing the default text into the database**.
+ * Writing it in would mean that improving a default prompt in `prompts.ts` later gets blocked
+ * by that stale snapshot — and the page gives no hint of it: you'd believe you were on the
+ * default while actually running the default from three months ago.
  */
 export async function setPrompt(purpose: Purpose, text: string | null): Promise<void> {
   const db = getDb();

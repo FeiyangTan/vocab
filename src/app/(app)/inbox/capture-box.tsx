@@ -8,19 +8,23 @@ import { Textarea } from '@/components/ui/textarea';
 import type { CategoryOption } from './review-list';
 
 /**
- * 网页端手动添加。
+ * Adding by hand from the web.
  *
- * 存在的理由：macOS 的「服务」机制在这台机器上注册不上（Preview / Chrome 的服务菜单里
- * 始终看不到快捷指令，`pbs -dump` 注册表里 0 匹配），Mac 端的键盘快捷键这条路走不通。
- * iPhone 的分享表单不受影响，照常用。
+ * Why it exists: macOS's Services mechanism won't register on this machine (the Shortcut never
+ * appears in Preview's or Chrome's Services menu, and `pbs -dump` shows 0 matches in the
+ * registry), so the Mac keyboard-shortcut route is a dead end. The iPhone share sheet is
+ * unaffected and still works.
  *
- * 走 cookie 鉴权，不是 token —— token 只留给快捷指令，别落进前端 JS。
+ * Cookie-authenticated, not token — the token is reserved for the Shortcut and must not end up
+ * in frontend JS.
  *
- * 默认**按行拆成多条**（一次录一串单词很常见）。但 PDF / 电子书复制过来的句子带的是
- * 排版折行，不是句子边界，拆了会变成残句 —— 所以给一个「整段当一条」的开关。
+ * By default it **splits on newlines into separate items** (entering a run of words at once is
+ * common). But sentences copied from a PDF or an ebook carry layout line wraps, not sentence
+ * boundaries, and splitting those produces fragments — hence the "whole block is one item"
+ * toggle.
  *
- * 那排「存到」按钮渲染在这里，但 state 在 `InboxPanel` 上 —— 它是个总开关，
- * 下面的审核卡也要读同一个值。
+ * The "Save to" row renders here but its state lives on `InboxPanel` — it's a master control,
+ * and the review cards below read the same value.
  */
 export function CaptureBox({
   categories,
@@ -72,7 +76,7 @@ export function CaptureBox({
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
-          // ⌘Enter / Ctrl+Enter 直接提交，不用摸鼠标
+          // ⌘Enter / Ctrl+Enter submits directly, without reaching for the mouse
           if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
             e.preventDefault();
             void submit();

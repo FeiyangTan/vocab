@@ -9,24 +9,26 @@ import type { CategoryRow } from '@/db/queries';
 import { MAX_CATEGORY_NAME } from '@/lib/categories';
 
 /**
- * 分类的增删改。
+ * Create, rename and delete categories.
  *
- * 仓库里没有 Dialog 组件，删除确认做成**行内展开**（选转移目标 + 确认），
- * 和纸质风一致，也少一个依赖。
+ * There is no Dialog component in this repository, so delete confirmation **expands inline**
+ * (pick a destination, then confirm) — consistent with the paper look, and one fewer
+ * dependency.
  *
- * 每次写完都 `router.refresh()` 重新拉服务端数据，不在本地拼状态 ——
- * 词数、默认标记会被别的操作连带改掉（删掉默认分类时默认会顺延），
- * 本地推算迟早对不上。
+ * Every write is followed by `router.refresh()` to re-fetch from the server rather than
+ * patching local state — word counts and the default flag get changed as side effects of
+ * other operations (deleting the default category promotes another), and local guesses would
+ * eventually diverge.
  */
 export function CategoryList({ initial }: { initial: CategoryRow[] }) {
   const router = useRouter();
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
-  /** 正在改名的分类 id */
+  /** The id of the category being renamed */
   const [editing, setEditing] = useState<number | null>(null);
   const [draft, setDraft] = useState('');
-  /** 正在确认删除的分类 id */
+  /** The id of the category awaiting delete confirmation */
   const [deleting, setDeleting] = useState<number | null>(null);
   const [moveTo, setMoveTo] = useState<number | null>(null);
   const [adding, setAdding] = useState(false);
@@ -96,7 +98,7 @@ export function CategoryList({ initial }: { initial: CategoryRow[] }) {
   function startDelete(row: CategoryRow) {
     setError('');
     setDeleting(row.id);
-    // 转移目标预选第一个别的分类，省一次点击
+    // Preselect the first other category as the destination, saving one tap
     setMoveTo(initial.find((c) => c.id !== row.id)?.id ?? null);
   }
 

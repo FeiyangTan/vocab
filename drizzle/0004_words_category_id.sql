@@ -1,5 +1,6 @@
--- drizzle 生成的是 `ADD COLUMN "category_id" integer NOT NULL`，在已有 34 行数据上会直接失败。
--- 手工拆成「先可空 → 回填 → 再收紧」，末尾状态和 snapshot 一致。
+-- drizzle generated `ADD COLUMN "category_id" integer NOT NULL`, which fails outright against
+-- the 34 existing rows. Split by hand into nullable → backfill → tighten; the end state
+-- matches the snapshot.
 ALTER TABLE "words" ADD COLUMN "category_id" integer;--> statement-breakpoint
 UPDATE "words" SET "category_id" = c."id" FROM "categories" c WHERE c."name" = "words"."domain"::text;--> statement-breakpoint
 ALTER TABLE "words" ALTER COLUMN "category_id" SET NOT NULL;--> statement-breakpoint

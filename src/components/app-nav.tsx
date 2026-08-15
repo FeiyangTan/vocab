@@ -12,7 +12,7 @@ const ITEMS = [
   { href: '/inbox', label: 'Inbox', icon: Inbox, key: 'pending' },
   { href: '/words', label: 'Words', icon: BookText, key: 'words' },
   { href: '/categories', label: 'Categories', icon: Tags, key: 'categories' },
-  // 用量不是「待办数」，标个数字没意义，所以 key 给 null
+  // Usage isn't a to-do count, so a badge there would mean nothing — hence key: null
   { href: '/usage', label: 'Usage', icon: Coins, key: null },
 ] as const;
 
@@ -22,13 +22,13 @@ function useActive() {
 }
 
 /**
- * 宽屏用左侧边栏，窄屏用底部标签栏。
+ * A left sidebar on wide screens, bottom tabs on narrow ones.
  *
- * 不用 shadcn 那个 `sidebar` 组件 —— 它带折叠、rail、cookie 持久化，
- * 三个固定菜单项用不上那套。
+ * Not shadcn's `sidebar` component — it brings collapsing, a rail, and cookie persistence,
+ * none of which a handful of fixed menu items needs.
  *
- * 窄屏走底栏是因为这个应用一半的场景是 iPhone PWA 复习，
- * 中后台那种侧边栏在手机上拇指够不着。
+ * Narrow screens get the bottom bar because half of this app's use is reviewing in the iPhone
+ * PWA, and a dashboard-style sidebar is out of thumb reach on a phone.
  */
 export function Sidebar({ counts }: { counts: NavCounts }) {
   const isActive = useActive();
@@ -44,7 +44,8 @@ export function Sidebar({ counts }: { counts: NavCounts }) {
             <Link
               key={href}
               href={href}
-              /* 选中态用左侧墨绿竖条 + 墨绿文字，不用灰底色块 —— 色块是后台的做法 */
+              /* The active state is an ink-green left bar plus ink-green text, not a grey
+                 filled block — filled blocks are a dashboard idiom */
               className={cn(
                 'flex items-center gap-2.5 border-l-2 px-3 py-2 text-sm transition-colors',
                 active

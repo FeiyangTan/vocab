@@ -18,24 +18,29 @@ export type Word = {
   category: string;
   contrasts: string[];
   remark: string | null;
-  /** 词频指标（Zipf）。null = SUBTLEX 未收录（词组、专名） */
+  /** Word frequency (Zipf). null = not listed in SUBTLEX (phrases, proper nouns) */
   zipf: number | null;
-  /** 最近一次 encounter 的释义。释义挂在 encounter 上，同一个词不同语境可以不同 */
+  /** The most recent encounter's definition. Definitions hang off encounters, so the same
+   *  word can be defined differently in different contexts */
   note: string | null;
-  /** 那一次的词性，和释义同源 */
+  /** That encounter's part of speech, from the same source as the definition */
   pos: string | null;
 };
 
 /**
- * 纸质风：不用带 ring 的圆角盒子，靠**一条发丝顶线 + 留白**分隔。
+ * The paper look: no rounded box with a ring, separated instead by **one hairline rule plus
+ * whitespace**.
  *
- * 右上角**不显示分类** —— 分类名可以很长（《Hocus and Pocus》），
- * 挤得单词本身只剩省略号，而单词才是这张卡上最该看清的东西。
- * 要看某个分类的词用上面那排筛选。
+ * The category is **not shown** in the top right — a category name can be long
+ * (《Hocus and Pocus》) and squeezes the word itself down to an ellipsis, when the word is the
+ * thing on this card that most needs to be legible. Use the filter row above to see one
+ * category's words.
  *
- * 详情**就地展开**，不用浮层 —— 浮层必然盖住旁边的卡片。就地展开只会把下面几行
- * 往下推，任何时候都没有内容被遮住。多张卡可以同时展开（各自持有自己的 open），
- * 不做互斥：互斥会让「对着比较两个词」变得做不到。
+ * The detail **expands in place** rather than floating — a floating layer inevitably covers
+ * the neighbouring cards. Expanding in place only pushes the rows below downward, so nothing
+ * is ever obscured. Several cards can be expanded at once (each owns its own open state), and
+ * they are deliberately not mutually exclusive: exclusivity would make comparing two words
+ * side by side impossible.
  */
 export function WordCard({
   word,
@@ -49,28 +54,33 @@ export function WordCard({
 }: {
   word: Word;
   encounters: Encounter[];
-  /** 对比词 → 中文，服务端查好的；hover 显示 */
+  /** confusable → gloss, resolved on the server; shown on hover */
   glosses: Record<string, string>;
-  /** 美式音标。null = 关掉了显示，或 CMUdict 里查不到（约 7%，多为词组） */
+  /** US phonetics. null = display is switched off, or CMUdict has no entry (about 7%, mostly
+   *  phrases) */
   phonetic: string | null;
-  /** 中文释义可不可见。默认藏着，词汇页因此能当自测用 */
+  /** Whether the definition is visible. Hidden by default, which is what lets the words page
+   *  double as self-testing */
   revealed: boolean;
   onToggleReveal: () => void;
-  /** 详情展不展开。状态在 WordList 上 —— 顶部那个「全部展开」要能一把改掉所有卡 */
+  /** Whether the detail is expanded. The state lives on WordList — the "expand all" control
+   *  at the top has to change every card at once */
   expanded: boolean;
   onToggleExpand: () => void;
 }) {
   const [contrasts, setContrasts] = useState(word.contrasts);
   const [remark, setRemark] = useState(word.remark);
-  /** 删除点第一次只上膛 —— 连带删掉原句和复习进度，没有撤销 */
+  /** The first tap on Delete only arms it — it takes the sentences and review progress with
+   *  it, and there is no undo */
   const [armed, setArmed] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const router = useRouter();
 
   /*
-   * 拖拽**只挂在手柄上**（`listeners` 给 grip，不给整张卡）。
-   * 卡上已经有 6 类可点的东西 —— 单词发音、对比词发音、眼睛、展开、删除、
-   * 详情里的编辑 —— 整卡可拖会把它们全部变得难点。
+   * Dragging is bound **to the handle only** (`listeners` go to the grip, not the whole card).
+   * The card already carries six kinds of tappable thing — speak the word, speak a confusable,
+   * the eye, expand, delete, and the editors inside the detail — and making the whole card
+   * draggable would make every one of them harder to hit.
    */
   const {
     attributes,
@@ -82,7 +92,8 @@ export function WordCard({
     isDragging,
   } = useSortable({ id: word.id });
 
-  // 上了膛没接着点就自动下膛，免得半小时后手滑碰一下就没了
+  // Disarm automatically if the second tap doesn't come, so a stray touch half an hour later
+  // can't delete anything
   useEffect(() => {
     if (!armed) return;
     const timer = setTimeout(() => setArmed(false), 5000);
@@ -90,8 +101,9 @@ export function WordCard({
   }, [armed]);
 
   /**
-   * 点头部切换展开。**落在任何可交互元素上就不管** —— 卡上有拖动手柄、
-   * 单词发音、眼睛、删除，它们各有各的事，不能顺带把卡收起来。
+   * Tapping the header toggles expansion. **Anything landing on an interactive element is
+   * ignored** — the card has a drag handle, speak-the-word, the eye and delete, each with its
+   * own job, and none of them should collapse the card as a side effect.
    */
   function toggleFromHeader(event: React.MouseEvent) {
     if ((event.target as HTMLElement).closest('button, a, input, textarea')) return;
@@ -118,15 +130,18 @@ export function WordCard({
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       /*
-        外框 2px，比卡片内部那些 1px 的发丝线粗一档，层次分得开。
-        不用 1.5px：DPR 为 1 的屏上浏览器会把它向下取整成 1px，和内部线一样粗，等于白加。
+        A 2px outer border, one step heavier than the 1px hairlines inside the card, so the
+        layers stay distinct.
+        Not 1.5px: on a DPR-1 screen the browser floors it to 1px, matching the inner lines
+        exactly, which makes it pointless.
       */
       className={cn('rounded-sm border-2 border-border p-4', isDragging && 'opacity-40')}
     >
       {/*
-        点头部区域展开/收起，不再有单独的 ⌄ 按钮。
-        **只挂在头部不挂整卡** —— 展开区里有一堆能点的东西（改释义、加对比词、
-        写备注），整卡可点的话在里面点个空白就会把卡收起来。
+        Tapping the header area expands/collapses; there's no separate ⌄ button any more.
+        **Bound to the header, not the whole card** — the expanded area is full of tappable
+        things (edit the definition, add a confusable, write a note), and a whole-card handler
+        would collapse it whenever you tapped a blank spot inside.
       */}
       <div
         onClick={toggleFromHeader}
@@ -145,11 +160,13 @@ export function WordCard({
           <GripVertical className="size-3.5" />
         </button>
         {/*
-          单词和音标绑在一起占左边，让音标**贴着词**；
-          flex-1 给的是这个组合而不是单词本身 —— 给单词的话它会撑开，把音标推到右边去。
+          The word and its phonetics are bound together on the left so the phonetics sit
+          **against** the word; flex-1 is applied to the pair rather than to the word itself —
+          on the word it would stretch and push the phonetics off to the right.
         */}
         <div className="flex min-w-0 flex-1 items-baseline gap-1.5">
-          {/* 单词本身就是发音按钮 —— 旁边再挂个喇叭图标是多余的一次视觉噪音 */}
+          {/* The word is itself the speak button — a separate speaker icon beside it would
+              be pure visual noise */}
           <button
             type="button"
             aria-label={`Speak ${word.lemma}`}
@@ -158,7 +175,7 @@ export function WordCard({
           >
             {word.lemma}
           </button>
-          {/* 音标也是发音按钮 —— 和点单词一样，点哪儿都能读 */}
+          {/* The phonetics speak too — same as tapping the word, either target works */}
           {phonetic && (
             <button
               type="button"
@@ -187,12 +204,15 @@ export function WordCard({
       </div>
 
       {/*
-        眼睛放在释义这一行 —— 它管的就是这行，放到底部那排还要多想一步。
-        紧跟在释义后面：藏起来时左边没东西，它自然落在最左；点开后就在中文右边。
+        The eye sits on the definition row — that row is what it governs, and putting it in the
+        bottom row would take one more inference to connect.
+        It follows the definition: while hidden there's nothing to its left so it falls
+        naturally at the far left, and once revealed it sits to the right of the text.
       */}
       {word.note && (
         <div className="mt-1 flex items-start gap-1">
-          {/* 藏起来时左边什么都不放。不用 blur 也不用占位符 —— 糊的短中文还是能猜出来 */}
+          {/* Nothing at all to the left while hidden. No blur and no placeholder — a short
+              blurred gloss is still guessable */}
           {revealed && (
             <p className="line-clamp-2 text-sm text-muted-foreground">
               {word.pos && <span className="mr-1 text-muted-foreground/60">{word.pos}</span>}
@@ -236,8 +256,10 @@ export function WordCard({
 }
 
 /**
- * 五格档位条 —— 词越常见格子越满。放在单词右边（去掉「N 次」之后空出来的位置）。
- * 未收录的显示一个破折号，不硬凑成 0 格（那会读作「最罕见」，是错的）。
+ * A five-cell band indicator — the more common the word, the fuller it is. It sits to the
+ * right of the word, in the space freed when the "N times" counter was removed.
+ * A word not in the corpus shows a dash rather than being forced to zero cells (which would
+ * read as "rarest of all", and that's wrong).
  */
 function FrequencyBar({ zipf }: { zipf: number | null }) {
   const band = frequencyBand(zipf);

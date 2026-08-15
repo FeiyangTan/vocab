@@ -8,15 +8,16 @@ import { zipfOf } from '@/lib/frequency';
 import { cleanRemark } from '@/lib/remark';
 
 /**
- * 审核确认：把（可能被人改过的）草稿真正写成 word + encounter + card。
+ * Review confirm: turn the (possibly hand-edited) draft into a real word + encounter + card.
  *
- * 这是整个流程里唯一写这三张表的地方 —— 没经过这里的东西不会进复习队列。
+ * This is the only place in the whole flow that writes those three tables — nothing that
+ * hasn't passed through here can enter the review queue.
  */
 
 /**
- * 归类不在 Draft 里 —— Claude 不再猜分类，是人在审核页选的。
- * 对比词在 Draft 里（`carve (cave)` 那种写法带过来的），但人可以在审核页改，
- * 所以以请求体为准。
+ * The category isn't part of Draft — Claude no longer guesses it; a person picks it on the
+ * review page. Confusables *are* in Draft (carried over from the `carve (cave)` shorthand),
+ * but they're editable on the review page, so the request body is authoritative.
  */
 function parseBody(body: unknown): { draft: Draft; categoryId: number } | null {
   if (typeof body !== 'object' || body === null) return null;
@@ -57,7 +58,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     return NextResponse.json({ error: 'Incomplete fields' }, { status: 400 });
   }
   const { draft, categoryId } = parsed;
-  // 对比词是 word 的属性，不是 encounter 的；Draft 里那份只是留档
+  // Confusables are a property of the word, not the encounter; the copy in Draft is
+  // only kept for the record
   const contrasts = draft.contrasts;
   const db = getDb();
 
@@ -70,7 +72,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         .limit(1);
       if (!row) throw new Error('NOT_PENDING');
 
-      // 分类可能在打开审核页之后被删掉了，写之前查一次
+      // The category may have been deleted since the review page was opened; check before
+      // writing
       const [category] = await tx
         .select({ id: categories.id })
         .from(categories)
@@ -78,7 +81,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         .limit(1);
       if (!category) throw new Error('NO_CATEGORY');
 
-      // 同一个 lemma 在同一个分类下复用同一条 word；不同分类算两个词
+      // The same lemma reuses one word row within a category; across categories they're
+      // two separate words
       const [existing] = await tx
         .select({ id: words.id, contrasts: words.contrasts, remark: words.remark })
         .from(words)
@@ -88,19 +92,22 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       let wordId: number;
       if (existing) {
         wordId = existing.id;
-        // **合并而不是覆盖** —— 第二次遇到同一个词时确认，不该把上次加的对比词抹掉
+        // **Merged, not overwritten** — confirming the same word a second time must not
+        // wipe the confusables added the first time
         const merged = [...new Set([...existing.contrasts, ...contrasts])].slice(
           0,
           MAX_CONTRASTS,
         );
-        // 备注是自由文本，没法像对比词那样取并集，所以**先到先得**：
-        // 已经写过就保留，第二次遇到同一个词时确认不该把上次手写的抹掉
+        // A note is free text and can't be unioned the way confusables can, so **first
+        // write wins**: an existing note is kept, because confirming the same word again
+        // must not erase what was written by hand last time
         const remark = existing.remark ?? draft.remark;
         if (merged.length !== existing.contrasts.length || remark !== existing.remark) {
           await tx.update(words).set({ contrasts: merged, remark }).where(eq(words.id, wordId));
         }
       } else {
-        // 新词排在这个分类的末尾 —— 默认 0 会排到最前，不是想要的
+        // New words go at the end of their category — the default of 0 would put them
+        // first, which isn't what's wanted
         const [{ max }] = await tx
           .select({ max: sql<number>`coalesce(max(${words.sortOrder}), 0)::int` })
           .from(words)
@@ -119,10 +126,11 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         wordId = created.id;
       }
 
-      // encounter 存的是**句子**，不是 inbox 里的原始输入：
-      // - 造句的条目，原始输入只是个孤立单词，存进来复习时底部什么也看不到
-      // - 网页分享的条目，原始输入夹着标题和 URL，存进来是噪音
-      // 原始输入不会丢 —— inbox.raw_text 永久保留。
+      // An encounter stores the **sentence**, not the raw inbox input:
+      // - for invented sentences the raw input is a lone word, which would leave the bottom
+      //   of the review card empty
+      // - for web shares the raw input drags along a title and a URL, which is just noise
+      // The raw input isn't lost — inbox.raw_text is kept forever.
       const [encounter] = await tx
         .insert(encounters)
         .values({
@@ -130,7 +138,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
           rawText: draft.sentence,
           source: draft.generated ? `${row.source}+ai` : row.source,
           note: draft.definition,
-          // 空串当没有 —— 模型拿不准时给的就是空串
+          // Empty string means absent — that's what the model returns when unsure
           pos: draft.pos || null,
         })
         .returning({ id: encounters.id });

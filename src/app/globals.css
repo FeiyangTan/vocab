@@ -3,22 +3,23 @@
 @import "shadcn/tailwind.css";
 
 /*
- * 暗色**跟随系统**，不做切换开关（文档明确排除了暗色模式这个功能）。
- * shadcn 默认生成的是 `.dark` class 驱动，这里改成 media query ——
- * 下面的 token 块也相应挂在 media query 下。
+ * Dark mode **follows the system**, with no toggle (the spec explicitly excludes a dark-mode
+ * feature). shadcn generates a `.dark` class-driven setup by default; this switches it to a
+ * media query — and the token blocks below hang off that media query to match.
  */
 @custom-variant dark (@media (prefers-color-scheme: dark));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  /* layout.tsx 里 next/font 注入的是 --font-geist-sans，不接上这里就是空值 */
+  /* next/font in layout.tsx injects --font-geist-sans; without wiring it here this is empty */
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   /*
-   * 英文内容用衬线（`font-serif` 工具类），UI 外壳继续用 Geist。
-   * Newsreader 没有中文字形，中文会落到 PingFang —— 这是**有意**的：
-   * 「要读的英文」和「辅助的中文」自然分层，比配一套宋体在手机上更清楚。
+   * English content uses the serif (the `font-serif` utility); the UI shell stays on Geist.
+   * Newsreader has no Chinese glyphs, so Chinese falls through to PingFang — which is
+   * **deliberate**: "the English you're here to read" and "the Chinese that supports it"
+   * separate naturally, and that reads better on a phone than pairing a Song face.
    */
   --font-serif: var(--font-newsreader), Georgia, "Times New Roman", serif;
   --font-heading: var(--font-sans);
@@ -61,9 +62,9 @@
 }
 
 /*
- * 纸质阅读风：暖白纸底 + 墨黑字 + 墨绿强调。
- * shadcn 默认那套 `oklch(… 0 0)` 中性灰是「内部管理后台」的调子，
- * 这里全量换成暖色 —— 用 hex 写，比 oklch 好核对。
+ * The paper reading look: warm off-white stock, ink-black type, ink-green accents.
+ * shadcn's default `oklch(… 0 0)` neutral greys are an internal-dashboard register, so every
+ * one is replaced with a warm value — written as hex, which is easier to verify than oklch.
  */
 :root {
   --background: #faf7f2;
@@ -81,7 +82,8 @@
   --accent: #ede6da;
   --accent-foreground: #2f5d50;
   --destructive: #a8342a;
-  /* 发丝级：纸质风靠留白和细线分层，不靠盒子和阴影 */
+  /* Hairline weight: the paper look layers with whitespace and thin rules, not boxes and
+     shadows */
   --border: #e7dfd3;
   --input: #ddd3c4;
   --ring: #2f5d50;
@@ -101,7 +103,8 @@
   --sidebar-ring: #2f5d50;
 }
 
-/* 暗色版的「纸」：不是纯黑，是墨底 —— 保持同一套暖色关系，只是明暗对调 */
+/* The dark version of the "paper": not pure black but an ink ground — the same warm
+   relationships, with light and dark swapped */
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #14120f;
@@ -110,7 +113,7 @@
     --card-foreground: #ede7dc;
     --popover: #1c1916;
     --popover-foreground: #ede7dc;
-    /* 墨绿在深底上要提亮，否则和背景糊在一起 */
+    /* The ink green has to be lifted on a dark ground, or it smears into the background */
     --primary: #7fb3a1;
     --primary-foreground: #14120f;
     --secondary: #262220;
@@ -140,11 +143,12 @@
 }
 
 /*
- * 快速过词：上一张卡飞走之后，下一张从**相反方向**顶进来 ——
- * 上滑判「认识」，新词就从下方升上来，像一叠卡片被抽掉一张。
+ * Quick pass: once a card flies away, the next one pushes in from **the opposite direction** —
+ * swipe up for Know and the new word rises from below, like a card being drawn off a deck.
  *
- * 用 keyframes 而不是 transition：进场是一次性的播放，配合元素上的 key 重新挂载
- * 就能重放。用 transition 的话得先渲染一帧偏移态再翻回 0，多一次 render 还容易错帧。
+ * keyframes rather than a transition: the entry is a one-shot playback, and remounting via the
+ * element's key replays it. A transition would require rendering one offset frame and then
+ * flipping back to 0 — an extra render, and easy to drop a frame.
  */
 @keyframes triage-enter-from-below {
   from {

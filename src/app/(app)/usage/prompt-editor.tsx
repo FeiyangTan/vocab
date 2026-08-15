@@ -16,16 +16,19 @@ import { cn } from '@/lib/utils';
 export type PromptState = { text: string; customized: boolean };
 
 /**
- * 看和改发给 Claude 的提示词。放在用量页、模型选择的正下方 ——
- * **这一页已经是「AI 的控制台」了**：用哪个模型、发什么指令、花了多少钱，
- * 是同一件事的三个面，改完提示词往下滚一屏就能看到它花了多少。
+ * View and edit the prompts sent to Claude. Directly below the model picker on the usage page
+ * — **this page is already the AI console**: which model, what instructions, and what it cost
+ * are three faces of one thing, and after editing a prompt you can scroll one screen to see
+ * what it spent.
  *
- * 默认全部折叠：这两段东西加起来一百多行，摊开会把用量统计整个挤到屏幕外，
- * 而看花费的频率远高于改提示词。
+ * Everything is collapsed by default: the two prompts run well over a hundred lines together,
+ * and expanded they would push the usage statistics entirely off screen — while checking
+ * spend is far more frequent than editing a prompt.
  *
- * 🔴 **只有 system prompt 能改**，user 消息和输出 schema 是只读的 ——
- * 前者是数据信封，后者是和数据库列一一对应的接口契约，理由写在 `prompts.ts`。
- * 但两者都**显示出来**：问的是「看全所有提示词」，藏起来就没答上。
+ * 🔴 **Only the system prompt is editable**; the user message and output schema are read-only
+ * — the first is a data envelope, the second an interface contract mapped one-to-one onto
+ * database columns, with the reasoning in `prompts.ts`. But both are **displayed**: the ask
+ * was to see every prompt, and hiding them wouldn't answer it.
  */
 export function PromptEditor({ current }: { current: Record<Purpose, PromptState> }) {
   return (
@@ -51,7 +54,7 @@ export function PromptEditor({ current }: { current: Record<Purpose, PromptState
 
 function PromptRow({ purpose, initial }: { purpose: Purpose; initial: PromptState }) {
   const [open, setOpen] = useState(false);
-  /** 已保存的那一版 —— 拿它和草稿比，判断「改了没有」 */
+  /** The saved version — compared against the draft to decide whether anything changed */
   const [saved, setSaved] = useState(initial);
   const [draft, setDraft] = useState(initial.text);
   const [busy, setBusy] = useState<'save' | 'reset' | null>(null);
@@ -79,7 +82,8 @@ function PromptRow({ purpose, initial }: { purpose: Purpose; initial: PromptStat
       setError(data.error ?? 'Failed to save');
       return;
     }
-    // 服务端回的是真正生效的那一份 —— 恢复默认之后要用它把编辑框填回去
+    // The server returns whatever is actually in effect — after a reset it's what refills
+    // the editor
     setSaved({ text: data.prompt, customized: data.customized === true });
     setDraft(data.prompt);
   }
@@ -118,9 +122,11 @@ function PromptRow({ purpose, initial }: { purpose: Purpose; initial: PromptStat
             onChange={(e) => setDraft(e.target.value)}
             spellCheck={false}
             aria-label={`${PURPOSE_LABEL[purpose]} system prompt`}
-            /* 🔴 `max-h` 是必须的：`Textarea` 基类带 `field-sizing-content`，
-               会撑到内容那么高 —— 整理那段两千多字，展开后能有九十来行，
-               把保存按钮和下面整页用量统计全推到屏幕外。封顶之后自己出滚动条。 */
+            /* 🔴 The `max-h` is required: the `Textarea` base class carries
+               `field-sizing-content`, so it grows to fit its content — and the drafting prompt
+               runs over two thousand characters, some ninety lines expanded, pushing the save
+               button and the entire usage report below it off screen. Capped, it scrolls
+               internally instead. */
             className="max-h-[60vh] min-h-64 overflow-auto font-mono text-xs leading-relaxed"
           />
 
@@ -134,8 +140,9 @@ function PromptRow({ purpose, initial }: { purpose: Purpose; initial: PromptStat
               {dirty ? 'Save' : 'Saved'}
             </button>
 
-            {/* 只在真的有自定义时才给「恢复默认」—— 本来就是默认的时候，
-                这个按钮点了什么也不会发生，摆着只会让人怀疑自己漏看了什么 */}
+            {/* "Reset to default" appears only when something is actually customised — on a
+                path already at the default it would do nothing when pressed, and its presence
+                would only make you wonder what you'd missed */}
             {saved.customized && (
               <button
                 type="button"
@@ -160,7 +167,7 @@ function PromptRow({ purpose, initial }: { purpose: Purpose; initial: PromptStat
             </span>
           </div>
 
-          {/* 改动没保存就离开这一屏很容易，给一句明确的提示，不做拦截 */}
+          {/* Leaving with unsaved edits is easy, so say so plainly — but don't block it */}
           {dirty && !error && (
             <p className="text-xs text-muted-foreground">
               Unsaved — the next call still uses the saved version.
@@ -174,7 +181,8 @@ function PromptRow({ purpose, initial }: { purpose: Purpose; initial: PromptStat
             body={JSON.stringify(OUTPUT_SCHEMA[purpose], null, 2)}
           />
 
-          {/* 改坏了想对照原文时，不用去翻代码 */}
+          {/* So that comparing against the original after breaking something doesn't mean
+              digging through the code */}
           {saved.customized && (
             <ReadOnlyBlock label="Default system prompt" body={DEFAULT_PROMPT[purpose]} />
           )}
@@ -184,14 +192,16 @@ function PromptRow({ purpose, initial }: { purpose: Purpose; initial: PromptStat
   );
 }
 
-/** 只读的那几段：默认收起，`<details>` 就够了，不值得再上一套状态 */
+/** The read-only blocks: collapsed by default, and `<details>` is enough — not worth another
+ *  piece of state */
 function ReadOnlyBlock({ label, body }: { label: string; body: string }) {
   return (
     <details className="text-xs">
       <summary className="cursor-pointer text-[11px] uppercase tracking-[0.14em] text-muted-foreground marker:text-muted-foreground">
         {label} <span className="normal-case tracking-normal">(read-only)</span>
       </summary>
-      {/* `overflow-x-auto`：schema 里有长行，窄屏上不给它自己的滚动条就会把整页撑宽 */}
+      {/* Its own scroll container: the schema has long lines, and without one a narrow
+          screen would be stretched wide by them */}
       <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-sm border border-border bg-muted/30 p-2 font-mono leading-relaxed text-muted-foreground">
         {body}
       </pre>

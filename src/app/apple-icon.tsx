@@ -1,6 +1,7 @@
 import { ImageResponse } from 'next/og';
 
-/** iPhone「添加到主屏」用的图标。iOS 不做圆角裁切以外的处理，所以背景要铺满。 */
+/** The icon iPhone's "Add to Home Screen" uses. iOS does nothing beyond rounding the
+ *  corners, so the background has to cover the whole square. */
 export const size = { width: 180, height: 180 };
 export const contentType = 'image/png';
 

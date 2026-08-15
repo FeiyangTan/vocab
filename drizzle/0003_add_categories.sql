@@ -6,8 +6,9 @@ CREATE TABLE "categories" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
--- 把原来写死的两个 domain 变成真正的分类行。下一个迁移靠 name 回填 words.category_id，
--- 所以这里的 name 必须和 word_domain 枚举的字面量一字不差。
+-- Turn the two previously hardcoded domains into real category rows. The next migration
+-- backfills words.category_id by name, so these names must match the word_domain enum
+-- literals exactly.
 INSERT INTO "categories" ("name", "sort_order", "is_default") VALUES
 	('work', 0, true),
 	('daily', 1, false);

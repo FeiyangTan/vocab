@@ -1,5 +1,6 @@
--- drizzle 生成的是 `ADD COLUMN … NOT NULL DEFAULT 0`，那样 223 行会全部变成 0、
--- 现有的字母序当场丢掉。手工拆成「先可空 → 按字母序回填 → 再收紧」。
+-- drizzle generated `ADD COLUMN … NOT NULL DEFAULT 0`, which would set all 223 rows to 0 and
+-- destroy the existing alphabetical order on the spot. Split by hand into nullable → backfill
+-- alphabetically → tighten.
 ALTER TABLE "words" ADD COLUMN "sort_order" integer;--> statement-breakpoint
 UPDATE "words" w SET "sort_order" = s.rn
   FROM (SELECT id, row_number() OVER (ORDER BY lemma) AS rn FROM "words") s

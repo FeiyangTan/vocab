@@ -9,12 +9,14 @@ import { speak } from '@/lib/speak';
 import { cn } from '@/lib/utils';
 import { WordDetail, type Encounter } from '../../../words/word-detail';
 
-/** 音标开关存这儿。设置就该记住 —— 每进一次都要重按一遍不叫设置 */
+/** Where the phonetics toggle is stored. A setting should be remembered — one you re-press
+ *  on every visit isn't a setting */
 const PHONETIC_KEY = 'vocab:triage:phonetic';
 
-/** 滑多远算数。手机上一个拇指的自然行程大概这么多 */
+/** How far counts as a swipe. About the natural travel of one thumb on a phone */
 const SWIPE_THRESHOLD = 70;
-/** 超过这个位移就认定「这是一次滑动」，随后的 click 要挡掉（否则划过单词会顺带发音） */
+/** Past this displacement it counts as "a swipe", and the click that follows must be
+ *  suppressed (otherwise swiping across the word also speaks it) */
 const SLOP = 8;
 
 type Word = {
@@ -25,33 +27,39 @@ type Word = {
   contrasts: string[];
   zipf: number | null;
   category: string;
-  /** 同一个词的每一次遇到，各带各的释义和原句 */
+  /** Every encounter of this word, each with its own definition and sentence */
   encounters: Encounter[];
 };
 
 /**
- * 「快速过词」一场。看单词 → 认识 / 不认识 / 删除，把整个分类刷空为一轮。
+ * One Quick pass session. See the word → Know / Don't know / Delete, clearing the whole
+ * category to finish a round.
  *
- * 队列在服务端，这里**一次只拿一个词** —— 和挖空复习同一个道理，也顺带让
- * 「刷新不丢进度」成立：前端手里根本没有队列。
+ * The queue lives on the server and this takes **one word at a time** — same reasoning as
+ * cloze review, and it also makes "refresh doesn't lose progress" true for free: the frontend
+ * holds no queue at all.
  *
- * 详情**默认藏着** —— 这个模式的意义就是先自测，答案得自己要。点开之后展示的
- * 和词汇页展开后**完全一样**（复用 `WordDetail`），包括原句和对比词：
- * 判断「认不认识」经常要靠原句才想得起来，看不到就只能靠猜。
+ * The detail is **hidden by default** — the point of this mode is to test yourself first, so
+ * the answer has to be asked for. Once opened it shows **exactly** what the words page shows
+ * when expanded (reusing `WordDetail`), sentences and confusables included: deciding whether
+ * you know a word often depends on the sentence to jog the memory, and without it you're only
+ * guessing.
  */
 export function TriageSession({
   scope,
   name,
   pushBack,
 }: {
-  /** 分类 id 或 `'all'`。直接拼进查询串 / 请求体，所以是字符串不是数字 */
+  /** A category id or `'all'`. Interpolated straight into the query string / request body,
+   *  hence a string rather than a number */
   scope: string;
   name: string;
-  /** 「不认识」往后挪几位。由服务端传进来 —— `@/lib/triage` 带着 drizzle，不能进客户端包 */
+  /** How many places a "Don't know" moves back. Passed in from the server — `@/lib/triage`
+   *  pulls in drizzle and must not enter the client bundle */
   pushBack: number;
 }) {
   const [word, setWord] = useState<Word | null>(null);
-  /** 对比词 → 音标+中文，跟词一起从接口拿（表在服务端） */
+  /** confusable → phonetics + gloss, fetched with the word (the tables live server-side) */
   const [glosses, setGlosses] = useState<Record<string, string>>({});
   const [remaining, setRemaining] = useState(0);
   const [roundOver, setRoundOver] = useState(false);
@@ -59,18 +67,22 @@ export function TriageSession({
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  /** 删除点第一次只上膛 —— 连带删掉原句和复习进度，没有撤销 */
+  /** The first tap on Delete only arms it — it takes the sentences and review progress with
+   *  it, and there is no undo */
   const [armed, setArmed] = useState(false);
-  /** 只剩一个词时按「不认识」，回来还是它。直说，别让人以为卡住了 */
+  /** Pressing "Don't know" on the last remaining word returns the same word. Say so plainly,
+   *  rather than letting it look stuck */
   const [stuck, setStuck] = useState(false);
   /*
-   * 要不要显示音标。**默认开**（就是原来的样子）。
+   * Whether to show phonetics. **On by default** (which is how it always was).
    *
-   * 这个模式里音标是和单词一起摆在眼前的，不像详情那样藏在「看详情」后面 ——
-   * 想连读音一起自测（看着拼写自己念，再点单词听对不对）就关掉它。
+   * In this mode the phonetics sit right there next to the word, rather than behind Details —
+   * so turn it off to test pronunciation too (read the spelling aloud yourself, then tap the
+   * word to check).
    *
-   * 初值给 true 而不是直接读 localStorage：服务端渲染时没有 localStorage，
-   * 直接读会让首屏和水合后不一致。真实值在下面的 effect 里补上。
+   * The initial value is true rather than a direct localStorage read: there is no localStorage
+   * during server rendering, and reading it directly makes the first paint disagree with
+   * hydration. The real value is filled in by the effect below.
    */
   const [showPhonetic, setShowPhonetic] = useState(true);
 
@@ -86,53 +98,61 @@ export function TriageSession({
   }
 
   /*
-   * ---- 上下滑手势 ----
+   * ---- vertical swipe gestures ----
    *
-   * 上滑 = 认识、下滑 = 不认识。**手机上的主路径**，底部按钮照旧保留。
-   * 删除故意没有手势：不可逆的事不该一划就发生（它现在要点两次）。
+   * Swipe up = Know, swipe down = Don't know. **The primary path on mobile**, with the bottom
+   * buttons kept as they were. Delete deliberately has no gesture: an irreversible action
+   * shouldn't happen from one swipe (it takes two taps as it is).
    *
-   * 用 Pointer Events 不用 Touch Events —— 触摸和鼠标走同一套，桌面上也能拖，
-   * 顺带让我（Claude）在桌面浏览器里就能验。
+   * Pointer Events rather than Touch Events — touch and mouse go through one code path, it
+   * drags on desktop too, and that also makes it verifiable in a desktop browser.
    */
 
-  /** 按下后的竖直位移。null = 没在拖 */
+  /** Vertical displacement since pointerdown. null = not dragging */
   const [dragY, setDragY] = useState<number | null>(null);
-  /** 判定通过后卡片飞出的方向。null = 没在飞 */
+  /** The direction the card flies once a judgement lands. null = not flying */
   const [flying, setFlying] = useState<'up' | 'down' | null>(null);
   /*
-   * 换过几张牌。挂在卡片的 `key` 上：数字一变 React 就重新挂载这个元素，
-   * 进场的 keyframes 随之重放。
+   * How many cards have been dealt. Used as the card's `key`: change the number and React
+   * remounts the element, which replays the entry keyframes.
    *
-   * 🔴 不能拿 `word.id` 当 key —— 只剩一个词时标「不认识」返回的还是它，
-   * id 没变，动画就不会重放，看起来像卡住了。
+   * 🔴 `word.id` can't be the key — marking "Don't know" on the last remaining word returns
+   * that same word, so the id doesn't change, the animation doesn't replay, and it looks
+   * frozen.
    */
   const [dealt, setDealt] = useState(0);
   /**
-   * 上一张是往哪个方向走的，决定下一张从哪边进场。
-   * 用 ref 不用 state：它只在渲染时被读一次，进 state 会让 `load` 的依赖变脏。
+   * Which way the previous card left, which decides the side the next one enters from.
+   * A ref rather than state: it's read once during render, and as state it would dirty
+   * `load`'s dependencies.
    */
   const flew = useRef<'up' | 'down' | null>(null);
   const startY = useRef(0);
-  /** 这一次交互是不是已经算「滑动」了。用来挡掉松手时那个 click */
+  /** Whether this interaction already counts as a swipe. Used to suppress the click on
+   *  release */
   const swiping = useRef(false);
   /*
-   * 正在拖 —— 🔴 **必须是 ref，不能拿 `dragY !== null` 判断。**
+   * Currently dragging — 🔴 **must be a ref; `dragY !== null` cannot stand in for it.**
    *
-   * `dragY` 是渲染闭包里的值：pointerdown 之后 React 还没重渲染时到来的
-   * pointermove，看到的仍然是旧的 null，那一段位移就被整个丢掉。手指快速一甩
-   * （down 和头几个 move 落在同一帧）正好是这种情况，滑动会莫名其妙失灵。
-   * ref 是当场读当场写，没有这个时间差。
+   * `dragY` is the value captured by the render closure: a pointermove arriving after
+   * pointerdown but before React has re-rendered still sees the stale null, and that entire
+   * stretch of movement is dropped. A quick flick of the finger (where down and the first few
+   * moves land in one frame) is exactly that case, and the swipe fails for no visible reason.
+   * A ref is written and read on the spot, with no such lag.
    */
   const dragging = useRef(false);
 
   /*
-   * 🔴 **只在详情收起时接管手势。**
+   * 🔴 **Only take over the gesture while the detail is collapsed.**
    *
-   * 竖滑和页面滚动抢同一个动作。详情收起时这一屏根本不用滚，手势区给
-   * `touch-action: none` 让浏览器彻底不插手（也顺带挡掉 iOS 的下拉刷新）；
-   * 详情展开后内容变长、页面要能滚，这时就把手势关掉、用底部按钮。
+   * A vertical swipe competes with page scrolling for the same motion. With the detail
+   * collapsed this screen doesn't need to scroll at all, so the gesture area gets
+   * `touch-action: none` to keep the browser entirely out of it (which also blocks iOS
+   * pull-to-refresh). Once the detail expands the content grows and the page must scroll, so
+   * the gesture is switched off and the bottom buttons take over.
    *
-   * 每换一个词详情都会自动收起，所以绝大多数时间手势都是开着的。
+   * The detail collapses automatically on every new word, so the gesture is live nearly all
+   * of the time.
    */
   const swipeEnabled = !revealed && !busy && !flying && word !== null;
 
@@ -143,16 +163,17 @@ export function TriageSession({
     dragging.current = true;
     setDragY(0);
     /*
-     * 捕获指针：手指划出这个元素也照样收得到事件。
+     * Capture the pointer, so events keep arriving even if the finger leaves this element.
      *
-     * try 包着是因为 pointerId 不是"活跃指针"时它会抛 NotFoundError，
-     * 抛出来就把整个 handler 带崩、手势直接失灵。捕获失败顶多是划出边界丢事件，
-     * 不值得为它牺牲整个手势。
+     * Wrapped in try because it throws NotFoundError when the pointerId isn't an "active
+     * pointer", and that throw takes the whole handler down with it — the gesture stops
+     * working entirely. A failed capture costs at most some events once you leave the
+     * element's bounds, which isn't worth sacrificing the gesture for.
      */
     try {
       e.currentTarget.setPointerCapture(e.pointerId);
     } catch {
-      // 忽略：没捕获到也能用，只是划出元素外会断
+      // Ignored: it still works uncaptured, it just breaks if you swipe outside the element
     }
   }
 
@@ -166,19 +187,22 @@ export function TriageSession({
   function onPointerUp(e: React.PointerEvent) {
     if (!dragging.current) return;
     dragging.current = false;
-    // 位移也当场从事件算，不读 state —— 同上，state 可能还没跟上最后一次 move
+    // The displacement is computed from the event too, not read from state — same reason,
+    // state may not have caught up with the final move
     const dy = e.clientY - startY.current;
     setDragY(null);
-    if (Math.abs(dy) < SWIPE_THRESHOLD) return; // 不够阈值，弹回原位
+    if (Math.abs(dy) < SWIPE_THRESHOLD) return; // under the threshold, springs back
 
     const direction = dy < 0 ? 'up' : 'down';
     setFlying(direction);
-    // 不等飞出动画放完再发请求 —— 网络往返本来就要 200~350ms，
-    // 串起来会明显卡顿。动画和请求同时走，哪个先完都不影响结果。
+    // Don't wait for the fly-out animation before sending the request — a round trip already
+    // takes 200–350ms, and running them in sequence is visibly sluggish. Animation and
+    // request run together, and whichever finishes first doesn't change the outcome.
     void judge(direction === 'up' ? 'known' : 'unknown');
   }
 
-  /** 松手时浏览器还会补一个 click，滑动的话要挡掉，不然会触发单词发音 */
+  /** The browser still fires a click on release; after a swipe it has to be suppressed, or
+   *  it triggers the word's pronunciation */
   function onClickCapture(e: React.MouseEvent) {
     if (!swiping.current) return;
     e.preventDefault();
@@ -210,7 +234,8 @@ export function TriageSession({
       setRemaining(data.remaining ?? 0);
       setRoundOver(Boolean(data.roundOver));
       setStuck(previousId !== undefined && next?.id === previousId);
-      // 新词到位：收掉飞出状态，换一张牌（key 变 → 进场动画重放）
+      // The new word has landed: clear the flying state and deal a card (key changes → the
+      // entry animation replays)
       setFlying(null);
       setDealt((n) => n + 1);
     },
@@ -224,14 +249,16 @@ export function TriageSession({
   async function judge(action: 'known' | 'unknown') {
     if (!word || busy) return;
     const id = word.id;
-    // 进场方向跟着判定走，所以按钮、快捷键、手势三条路都有一样的动效
+    // The entry direction follows the judgement, so buttons, shortcuts and gestures all
+    // produce the same motion
     flew.current = action === 'known' ? 'up' : 'down';
     setBusy(true);
     const response = await fetch(`/api/triage/${id}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      // scope 要一起发：「退后 10 位」是在**当前屏幕这个队列**里数的，
-      // 在「全部」里退 10 位和在一个分类里退 10 位落点不一样
+      // scope goes with it: "back 10 places" is counted inside **the queue currently on
+      // screen**, and going back 10 within All lands somewhere different than within one
+      // category
       body: JSON.stringify({ action, scope }),
     });
     setBusy(false);
@@ -240,7 +267,8 @@ export function TriageSession({
       setError(data.error ?? 'Failed to submit');
       return;
     }
-    // 只有「不认识」才可能原地不动，「认识」一定换人，不用提示
+    // Only "Don't know" can leave the word in place; "Know" always moves on, so no notice
+    // is needed
     await load(action === 'unknown' ? id : undefined);
   }
 
@@ -272,14 +300,16 @@ export function TriageSession({
     await load();
   }
 
-  // 上了膛没接着点就自动下膛，免得停在这一屏时手滑碰一下就没了
+  // Disarm automatically if the second tap doesn't come, so a stray touch while parked on
+  // this screen can't delete anything
   useEffect(() => {
     if (!armed) return;
     const timer = setTimeout(() => setArmed(false), 5000);
     return () => clearTimeout(timer);
   }, [armed]);
 
-  // 键盘：空格看详情，1 不认识、2 认识。**删除没有快捷键** —— 不可逆的事不该一按就发生
+  // Keyboard: space reveals the detail, 1 is Don't know, 2 is Know. **Delete has no
+  // shortcut** — an irreversible action shouldn't happen from one keypress
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (!word) return;
@@ -311,7 +341,8 @@ export function TriageSession({
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <span className="text-sm text-muted-foreground">{remaining} left</span>
-          {/* 音标开关。图标按钮不占地方 —— 这一屏的主角是中间那个词 */}
+          {/* The phonetics toggle. An icon button takes no room — this screen's subject is
+              the word in the middle */}
           <Button
             variant="ghost"
             size="icon-sm"
@@ -346,9 +377,11 @@ export function TriageSession({
       ) : (
         <>
           {/*
-            手势区 = 整个中间区域，不是只有单词那几十像素 —— 手机上得能随手一划，
-            不能要求瞄准。`touch-action: none` **只在手势开着时**加：
-            详情展开后内容变长、页面要能滚，那时候得把控制权还给浏览器。
+            The gesture area is the whole middle region, not just the few dozen pixels of the
+            word — on a phone it has to accept a casual swipe rather than demanding aim.
+            `touch-action: none` is applied **only while the gesture is live**: once the detail
+            expands the content grows and the page must scroll, and control goes back to the
+            browser.
           */}
           <div
             className={cn(
@@ -361,7 +394,8 @@ export function TriageSession({
             onPointerCancel={onPointerUp}
             onClickCapture={onClickCapture}
           >
-            {/* 上下两个提示。放在卡片**外面**，卡片跟手动它们不动 */}
+            {/* The two hints. **Outside** the card, so they stay put while the card follows
+                the finger */}
             <SwipeHint label="Know" side="up" dy={dragY} />
             <SwipeHint label="Don’t know" side="down" dy={dragY} />
 
@@ -371,7 +405,8 @@ export function TriageSession({
                 transform: flying
                   ? `translateY(${flying === 'up' ? '-120vh' : '120vh'})`
                   : dragY !== null
-                    ? // 跟手位移 + 轻微缩小，划得越远越"脱手"
+                    ? // Follows the finger and shrinks slightly — the further it goes, the
+                      // more it reads as leaving your hand
                       `translateY(${dragY}px) scale(${1 - Math.min(Math.abs(dragY), 240) / 2400})`
                     : undefined,
                 opacity:
@@ -380,7 +415,7 @@ export function TriageSession({
                     : dragY !== null
                       ? 1 - Math.min(Math.abs(dragY), 300) / 600
                       : undefined,
-                // 拖动中不能有 transition，否则跟不上手指
+                // No transition while dragging, or it can't keep up with the finger
                 transition: dragY !== null ? 'none' : undefined,
                 animation:
                   flying === null && flew.current
@@ -389,13 +424,15 @@ export function TriageSession({
               }}
               className={cn(
                 'flex flex-col justify-center gap-8',
-                // 飞出 180ms 直出；松手没过阈值时弹回，带一点回弹更像实物
+                // Flying out runs 180ms straight; releasing under the threshold springs back
+                // with a little bounce, which feels more physical
                 flying
                   ? 'transition-[transform,opacity] duration-[180ms] ease-out'
                   : 'transition-[transform,opacity] duration-200 ease-[cubic-bezier(.2,1.3,.4,1)]',
               )}
             >
-            {/* 词和音标绑在一起，音标贴着词 —— 和词汇页一致 */}
+            {/* Word and phonetics travel together, phonetics tucked against the word —
+                consistent with the words page */}
             <div className="flex flex-wrap items-baseline justify-center gap-x-2 gap-y-1">
               <button
                 type="button"
@@ -419,11 +456,12 @@ export function TriageSession({
 
             {revealed ? (
               /*
-               * 复用词汇页展开后的那个组件，**内容一模一样**：分类 + 词频、每条
-               * encounter 的释义和高亮原句、对比词、备注。不另写一份 ——
-               * 两处显示同一张卡，各写各的迟早对不上。
+               * Reuses the words page's expanded component, with **identical content**:
+               * category + frequency, each encounter's definition and highlighted sentence,
+               * confusables, and the note. No second copy — two places showing the same card
+               * would eventually drift apart if written separately.
                *
-               * `showLemma={false}`：词已经在上面大字摆着了。
+               * `showLemma={false}`: the word is already up there in large type.
                */
               <div className="space-y-4">
                 <Separator />
@@ -480,7 +518,8 @@ export function TriageSession({
               <span>Know</span>
               <span className="text-[11px] tabular-nums text-muted-foreground/60">2</span>
             </Button>
-            {/* 删除和前两个不同量级 —— 不给等宽，也不给快捷键 */}
+            {/* Delete is not in the same league as the other two — no equal width, and no
+                shortcut */}
             <Button
               variant="outline"
               disabled={busy}
@@ -502,13 +541,13 @@ export function TriageSession({
 }
 
 /**
- * 滑动时浮在上/下方的提示，告诉你（jimmy）**松手会发生什么**。
+ * The hint that floats above or below during a swipe, telling you **what releasing will do**.
  *
- * 只在往它那个方向划的时候出现：往上划只亮「认识」，往下划只亮「不认识」——
- * 两个一起亮的话等于没提示。
+ * It only appears for the direction you're actually swiping: up lights "Know", down lights
+ * "Don't know" — both lit at once would be no hint at all.
  *
- * 过阈值就变实心高亮，这一下视觉跳变就是「松手即生效」的信号，
- * 手机上没有 hover 可用，只能靠它。
+ * Past the threshold it switches to a solid highlight, and that visual jump *is* the "release
+ * now and it happens" signal. There's no hover on a phone, so this has to carry it.
  */
 function SwipeHint({
   label,
@@ -517,7 +556,7 @@ function SwipeHint({
 }: {
   label: string;
   side: 'up' | 'down';
-  /** 当前竖直位移，null = 没在拖 */
+  /** The current vertical displacement; null = not dragging */
   dy: number | null;
 }) {
   const towards = dy !== null && (side === 'up' ? dy < 0 : dy > 0);
@@ -531,7 +570,7 @@ function SwipeHint({
         'pointer-events-none absolute inset-x-0 flex justify-center transition-opacity duration-100',
         side === 'up' ? 'top-0' : 'bottom-0',
       )}
-      // 划到阈值时刚好全亮，之前按比例渐显
+      // Fully lit exactly at the threshold, fading in proportionally before that
       style={{ opacity: Math.min(distance / SWIPE_THRESHOLD, 1) }}
     >
       <span

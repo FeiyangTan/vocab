@@ -11,19 +11,21 @@ import { speak } from '@/lib/speak';
 
 export type Encounter = {
   id: number;
-  /** encounter 存的是**句子**，不是 inbox 里的原始输入 */
+  /** An encounter stores the **sentence**, not the raw inbox input */
   rawText: string;
   note: string | null;
   pos: string | null;
-  /** 复习时的正面，目标词被替换成 `___` */
+  /** The front of the review card, with the target word replaced by `___` */
   clozeText: string;
 };
 
 /**
- * 卡片展开后的详情。**纯展示，不带交互状态** —— 开关由 WordCard 管。
+ * The expanded detail of a card. **Pure display, holding no interaction state** — the toggle
+ * belongs to WordCard.
  *
- * 这里是 `/words` 上唯一能看到**原句**的地方。「我遇到它的那一次」是整个应用的
- * 立足点，词汇页却一直只有单词和释义，原句一个字都看不到。
+ * This is the only place on `/words` where the **original sentence** is visible. "The time I
+ * ran into it" is what the whole app stands on, yet the words page showed only the word and
+ * its definition, with not a word of the sentence.
  */
 export function WordDetail({
   wordId,
@@ -49,11 +51,12 @@ export function WordDetail({
   glosses: Record<string, string>;
   zipf: number | null;
   /**
-   * 顶部那行「词 + 改词」要不要显示。默认要 —— 词汇页的卡片头部是折叠态，
-   * 展开后需要它。
+   * Whether to show the top "word + rename" row. On by default — the words page's card header
+   * is the collapsed state, and the expanded view needs it.
    *
-   * 快速过词传 false：那一屏的主角就是屏幕中央那个大字词，紧接着再来一行
-   * 同一个词只是重复。（改词在词汇页做。）
+   * Quick pass passes false: that screen's subject is already the large word in the middle,
+   * so another row with the same word right beneath it just repeats. (Renaming happens on the
+   * words page.)
    */
   showLemma?: boolean;
 }) {
@@ -61,7 +64,7 @@ export function WordDetail({
 
   return (
     <div className="space-y-4 text-sm">
-      {/* 词本身放最前 —— 它是这张卡最主干的东西 */}
+      {/* The word comes first — it is this card's trunk */}
       {showLemma && (
         <>
           <LemmaRow wordId={wordId} lemma={lemma} />
@@ -81,8 +84,9 @@ export function WordDetail({
         <div key={e.id} className="space-y-1">
           {i > 0 && <Separator className="mb-3" />}
 
-          {/* 详情里的释义**固定显示**（展开本身就是「我要看全部」），而且可以改 ——
-              改的是这一条 encounter 的释义，不影响同一个词的其它 encounter */}
+          {/* In the detail the definition is **always shown** (expanding *is* the request to
+              see everything) and is editable — editing this encounter's definition, leaving
+              the word's other encounters alone */}
           <NoteRow
             encounterId={e.id}
             pos={e.pos}
@@ -90,7 +94,8 @@ export function WordDetail({
             onChange={(next) => setNotes((prev) => ({ ...prev, [e.id]: next }))}
           />
 
-          {/* 原句本身就是发音按钮，和单词、对比词一致 */}
+          {/* The sentence is itself the speak button, consistent with the word and the
+              confusables */}
           <button
             type="button"
             aria-label="Speak the example"
@@ -103,7 +108,8 @@ export function WordDetail({
         </div>
       ))}
 
-      {/* 对比词和备注都是手写的注解，放在释义原句之后 */}
+      {/* Confusables and the note are both hand-written annotations, so they follow the
+          definition and the sentence */}
       <Separator />
       <ContrastRow
         wordId={wordId}
@@ -119,16 +125,18 @@ export function WordDetail({
 }
 
 /**
- * 把原句里的目标词标出来。
+ * Highlight the target word inside the original sentence.
  *
- * 🔴 **靠挖空句定位，不靠 lemma 匹配。** 词在句子里常常是变形的
- *（`guard` → `guarded`、`stripe` → `stripes`），拿 lemma 去整词匹配根本找不到 ——
- * 库里 224 条 encounter 有 33 条是这种。
+ * 🔴 **Located via the cloze, not by matching the lemma.** Words are often inflected in the
+ * sentence (`guard` → `guarded`, `stripe` → `stripes`), so a whole-word match on the lemma
+ * simply doesn't find them — 33 of the 224 encounters in the database are like this.
  *
- * 而 `cloze_text` 里就精确记着当初挖掉的是哪一段：它和原句只差目标词那一处，
- * 对齐公共前缀和公共后缀，中间那段就是。实测 224/224 全部对得上。
+ * The `cloze_text`, though, records exactly which span was cut: it differs from the sentence
+ * in that one place, so aligning the common prefix and the common suffix leaves the span in
+ * between. Measured: 224/224 align.
  *
- * 对不齐时（挖空句被手工改过）退回 lemma 整词匹配，再不行就原样显示，不硬凑。
+ * When alignment fails (a cloze edited by hand), it falls back to a whole-word lemma match,
+ * and failing that displays the sentence as-is rather than forcing something.
  */
 function Highlighted({ text, cloze, lemma }: { text: string; cloze: string; lemma: string }) {
   const span = alignedSpan(text, cloze) ?? lemmaSpan(text, lemma);
@@ -143,7 +151,8 @@ function Highlighted({ text, cloze, lemma }: { text: string; cloze: string; lemm
   );
 }
 
-/** 挖空句和原句只差目标词那一处，前后缀对齐就能框出中间那段 */
+/** The cloze and the sentence differ only at the target, so aligning the prefix and suffix
+ *  brackets the span between them */
 function alignedSpan(text: string, cloze: string): { start: number; end: number } | null {
   const blank = cloze.indexOf('___');
   if (blank < 0) return null;
@@ -155,7 +164,7 @@ function alignedSpan(text: string, cloze: string): { start: number; end: number 
   return end > start ? { start, end } : null;
 }
 
-/** 退路：lemma 的大小写不敏感整词匹配 */
+/** The fallback: a case-insensitive whole-word match on the lemma */
 function lemmaSpan(text: string, lemma: string): { start: number; end: number } | null {
   const escaped = lemma.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const match = new RegExp(`\\b${escaped}\\b`, 'i').exec(text);

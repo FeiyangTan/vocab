@@ -8,11 +8,12 @@ import { phoneticOf } from '@/lib/phonetics';
 import { stampUnqueued } from '@/lib/triage';
 
 /**
- * 「快速过词」取下一个词。`GET /api/triage?category=<id|all>`
+ * Quick pass: fetch the next word. `GET /api/triage?category=<id|all>`
  *
- * 和 `/api/review` 一样每次只返回一个 —— 队列在服务端，前端不持有它。
- * 取词前先把范围内还没排过位置的词排进队列（见 `stampUnqueued`），
- * 所以第一次进来直接能用、不用先按「开始」，轮进行中新确认的词也会自动入队。
+ * Like `/api/review`, one word per request — the queue lives on the server and the frontend
+ * never holds it. Before fetching, any in-scope word without a position is stamped into the
+ * queue (see `stampUnqueued`), so the first visit just works with no "Start" button, and
+ * words confirmed mid-round join the queue automatically.
  */
 export const dynamic = 'force-dynamic';
 
@@ -24,7 +25,8 @@ export async function GET(request: Request) {
 
   const db = getDb();
 
-  // 分类可能刚被删掉 —— 不查的话下面全返回空，前端会显示成「过完了」
+  // The category may have just been deleted — without this check everything below returns
+  // empty and the frontend renders it as "round finished"
   if (scope !== 'all') {
     const [category] = await db
       .select({ id: categories.id })
@@ -41,7 +43,8 @@ export async function GET(request: Request) {
   const [counts] = await db
     .select({
       total: sql<number>`count(*)::int`,
-      // 还没排过位置的：>0 才需要发那条 UPDATE，常态下是 0，零额外开销
+      // How many have no position yet: the UPDATE below only fires when this is > 0, which
+      // in the steady state it isn't — so no extra cost
       unqueued: sql<number>`count(*) FILTER (WHERE ${words.triageOrder} IS NULL)::int`,
     })
     .from(words)
@@ -60,7 +63,8 @@ export async function GET(request: Request) {
       remark: words.remark,
       contrasts: words.contrasts,
       zipf: words.zipf,
-      // 分类名：在「全部」范围里过词时，这是唯一能看出这个词从哪儿来的信息
+      // The category name: in All scope this is the only thing that shows where a word
+      // came from
       category: categories.name,
     })
     .from(words)
@@ -70,11 +74,13 @@ export async function GET(request: Request) {
     .limit(1);
 
   /*
-   * 「看详情」要展示的和词汇页展开后的**完全一样**，所以这里也按 encounter 逐条取
-   *（同一个词在不同语境下释义不同，各带各的原句），口径和 `/words` 那边一致。
+   * "Details" has to show **exactly** what the words page shows when expanded, so this fetches
+   * per encounter too (the same word has different definitions in different contexts, each
+   * with its own original sentence), matching what `/words` does.
    *
-   * `clozeText` 不是拿来复习的 —— 是用来在原句里定位**当初挖掉的那一段**，
-   * 词在句子里常常是变形的（guard → guarded），拿 lemma 匹配找不到。
+   * `clozeText` isn't here for review — it's used to locate **the span that was blanked out**
+   * inside the original sentence. Words are often inflected there (guard → guarded), so
+   * matching on the lemma doesn't find them.
    */
   const detail = word
     ? await db
@@ -97,12 +103,14 @@ export async function GET(request: Request) {
     .where(inQueue);
 
   return NextResponse.json({
-    // 音标和对比词的中文都在服务端查好 —— 那两张表（0.95MB / 2.18MB）不进浏览器
+    // Phonetics and confusable glosses are both resolved server-side — those two tables
+    // (0.95MB / 2.18MB) never reach the browser
     word: word ? { ...word, phonetic: phoneticOf(word.lemma), encounters: detail } : null,
     glosses: word ? contrastHintsFor(word.contrasts) : {},
     remaining,
     total: counts.total,
-    /** 队列空了但范围内还有词 = 这一轮过完了（区别于「这个范围根本没有词」） */
+    /** Queue empty but the scope still has words = this round is finished (as distinct from
+     *  "this scope has no words at all") */
     roundOver: !word && counts.total > 0,
   });
 }

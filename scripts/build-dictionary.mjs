@@ -1,17 +1,19 @@
 /**
- * 从 ECDICT 生成精简的英汉查表 `src/lib/dictionary-data.json`。
+ * Build the reduced English → Chinese lookup `src/lib/dictionary-data.json` from ECDICT.
  *
- * 源数据：https://github.com/skywind3000/ECDICT （MIT，77 万词条）
+ * Source: https://github.com/skywind3000/ECDICT (MIT, 770k entries)
  *   curl -sLO https://raw.githubusercontent.com/skywind3000/ECDICT/master/ecdict.csv
  *   node scripts/build-dictionary.mjs ecdict.csv
  *
- * 🔴 **源 CSV 63MB，不进仓库**；生成出来的 JSON（约 2.2MB）提交，
- * 这样线上不需要任何下载步骤。
+ * 🔴 **The source CSV is 63MB and is not committed**; the generated JSON (about 2.2MB) is,
+ * so production needs no download step at all.
  *
- * 精简规则：
- * - 只保留 SUBTLEX 里 **Zipf ≥ 2.0** 的词（约 45k）。更小的 3.5 那档会漏掉
- *   `crispy`、`crypt`、`adapt` 这些**手动加的**对比词 —— 而手动加的最需要提示。
- * - 每条只留 `translation` 的**首行**、截断 40 字：完整释义有好几行，tooltip 放不下。
+ * Reduction rules:
+ * - keep only words at **Zipf ≥ 2.0** in SUBTLEX (about 45k). The tighter 3.5 line would drop
+ *   `crispy`, `crypt`, `adapt` — all **manually added** confusables, and manual ones are
+ *   exactly the ones that most need a hint.
+ * - keep only the **first line** of `translation`, truncated to 40 characters: a full gloss
+ *   runs several lines and won't fit a tooltip.
  */
 import { createRequire } from 'node:module';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -21,11 +23,12 @@ const subtlex = require('subtlex-word-frequencies');
 
 const source = process.argv[2];
 if (!source) {
-  console.error('用法: node scripts/build-dictionary.mjs <ecdict.csv 路径>');
+  console.error('usage: node scripts/build-dictionary.mjs <path to ecdict.csv>');
   process.exit(1);
 }
 
-/** 只保留常用到值得放进查表的词。比 AI 建议那道 3.5 的线松，见文件头 */
+/** Keep only words common enough to be worth a lookup entry. Looser than the 3.5 line used
+ *  for AI suggestions — see the file header */
 const MIN_ZIPF = 2.0;
 const MAX_GLOSS = 40;
 
@@ -38,7 +41,8 @@ for (const { word, count } of subtlex) {
 }
 const zipf = (word) => Math.log10((counts.get(word) / corpusTotal) * 1e9);
 
-/** ECDICT 的释义字段里有引号和逗号，得逐字符扫，不能 split(',') */
+/** ECDICT's gloss field contains quotes and commas, so it has to be scanned character by
+ *  character; split(',') won't do */
 function cells(line) {
   const out = [];
   let cur = '';
@@ -72,7 +76,7 @@ for (let i = 1; i < lines.length; i++) {
   if (!word) continue;
   scanned++;
   if (!counts.has(word) || zipf(word) < MIN_ZIPF) continue;
-  // translation 是多行的，`\n` 在 CSV 里是字面的两个字符
+  // translation is multi-line, and `\n` appears in the CSV as two literal characters
   const gloss = (row[3] ?? '').split('\\n')[0].trim().slice(0, MAX_GLOSS);
   if (gloss) dict[word] = gloss;
 }
@@ -80,6 +84,6 @@ for (let i = 1; i < lines.length; i++) {
 const json = JSON.stringify(dict);
 writeFileSync('src/lib/dictionary-data.json', json);
 console.error(
-  `扫描 ${scanned.toLocaleString()} 条，保留 ${Object.keys(dict).length.toLocaleString()} 条，` +
+  `scanned ${scanned.toLocaleString()}, kept ${Object.keys(dict).length.toLocaleString()}, ` +
     `${(Buffer.byteLength(json) / 1048576).toFixed(2)} MB → src/lib/dictionary-data.json`,
 );
