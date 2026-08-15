@@ -496,8 +496,13 @@ function ReviewCard({
         <div>
           <div className="mb-1 text-xs text-muted-foreground">
             例句
+            {/*
+              `generated` 现在覆盖两种情况：整句由 AI 造的（只输入了一个词），
+              以及半截话被 AI 补成了完整句。后者里那半句是他真遇到的，
+              所以不能再说「AI 造的」—— 统一说成「不是你原样遇到的」。
+            */}
             {d.generated && (
-              <span className="ml-2 text-amber-600">⚠ AI 造的，不是你真实遇到的语境</span>
+              <span className="ml-2 text-amber-600">⚠ 不是你原样遇到的，AI 补过或造过</span>
             )}
           </div>
           <Textarea
