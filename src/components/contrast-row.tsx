@@ -50,7 +50,7 @@ export function ContrastRow({
       error?: string;
     };
     if (!response.ok) {
-      setError(data.error ?? '匹配失败');
+      setError(data.error ?? 'Matching failed');
       return;
     }
     // 服务端已经和已有的取过并集、清洗过，直接用它的结果
@@ -59,8 +59,8 @@ export function ContrastRow({
     if (!data.added?.length) {
       setNotice(
         data.dropped
-          ? `没找到够常用的对比词（${data.dropped} 个建议因为太生僻被滤掉）`
-          : '没找到合适的对比词',
+          ? `No common-enough confusables (${data.dropped} suggestions dropped as too rare)`
+          : 'No suitable confusables found',
       );
     }
   }
@@ -97,8 +97,8 @@ export function ContrastRow({
           variant="ghost"
           size="icon-xs"
           className="shrink-0 text-muted-foreground"
-          aria-label="让 AI 匹配对比词"
-          title="让 AI 找拼写相近 / 同音 / 发音易混的词，直接加进来"
+          aria-label="Let AI find confusables"
+          title="Let AI find look-alike / homophone / easily-confused words and add them"
           disabled={suggesting || pending}
           onClick={() => void suggest()}
         >

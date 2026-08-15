@@ -54,12 +54,12 @@ export type Band = { level: number; label: string };
 
 /** 界面上显示的档位。level 0 = 未收录，1–5 由罕见到极常见 */
 export function frequencyBand(zipf: number | null): Band {
-  if (zipf === null) return { level: 0, label: '未收录' };
-  if (zipf >= 5) return { level: 5, label: '极常见' };
-  if (zipf >= 4) return { level: 4, label: '常见' };
-  if (zipf >= 3) return { level: 3, label: '中等' };
-  if (zipf >= 2) return { level: 2, label: '生僻' };
-  return { level: 1, label: '罕见' };
+  if (zipf === null) return { level: 0, label: 'unlisted' };
+  if (zipf >= 5) return { level: 5, label: 'very common' };
+  if (zipf >= 4) return { level: 4, label: 'common' };
+  if (zipf >= 3) return { level: 3, label: 'mid' };
+  if (zipf >= 2) return { level: 2, label: 'rare' };
+  return { level: 1, label: 'very rare' };
 }
 
 /**

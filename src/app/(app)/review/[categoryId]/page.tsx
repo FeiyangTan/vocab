@@ -23,7 +23,7 @@ export default async function CategoryReviewPage({
   if (scope === null) notFound();
 
   if (scope === 'all') {
-    return <ReviewSession scope="all" name="全部" />;
+    return <ReviewSession scope="all" name="All" />;
   }
 
   const [category] = await getDb()

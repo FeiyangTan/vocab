@@ -14,7 +14,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ cardId: st
   const body = (await request.json().catch(() => null)) as { grade?: unknown } | null;
   const grade = typeof body?.grade === 'number' ? body.grade : NaN;
   if (!Number.isInteger(grade) || grade < 0 || grade > 3) {
-    return NextResponse.json({ error: 'grade 必须是 0–3 的整数' }, { status: 400 });
+    return NextResponse.json({ error: 'grade must be an integer from 0 to 3' }, { status: 400 });
   }
 
   const db = getDb();
@@ -25,7 +25,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ cardId: st
     .where(eq(cards.id, cardId))
     .limit(1);
 
-  if (!card) return NextResponse.json({ error: '卡片不存在' }, { status: 404 });
+  if (!card) return NextResponse.json({ error: 'Card not found' }, { status: 404 });
 
   const next = sm2(card, grade);
 

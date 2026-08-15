@@ -21,7 +21,7 @@ export async function PUT(request: Request, ctx: { params: Promise<{ id: string 
 
   const body = (await request.json().catch(() => null)) as { remark?: unknown } | null;
   if (!body || !('remark' in body)) {
-    return NextResponse.json({ error: '缺少 remark' }, { status: 400 });
+    return NextResponse.json({ error: 'Missing remark' }, { status: 400 });
   }
   const remark = cleanRemark(body.remark);
 
@@ -32,7 +32,7 @@ export async function PUT(request: Request, ctx: { params: Promise<{ id: string 
     .returning({ id: words.id });
 
   if (updated.length === 0) {
-    return NextResponse.json({ error: '词不存在' }, { status: 404 });
+    return NextResponse.json({ error: 'Word not found' }, { status: 404 });
   }
   return NextResponse.json({ ok: true, remark });
 }

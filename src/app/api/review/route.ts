@@ -19,7 +19,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {
   const scope = parseScope(new URL(request.url).searchParams.get('category'));
   if (scope === null) {
-    return NextResponse.json({ error: "category 必须是分类 id 或 'all'" }, { status: 400 });
+    return NextResponse.json({ error: "category must be a category id or 'all'" }, { status: 400 });
   }
 
   const db = getDb();
@@ -32,7 +32,7 @@ export async function GET(request: Request) {
       .where(eq(categories.id, scope))
       .limit(1);
     if (!category) {
-      return NextResponse.json({ error: '分类不存在' }, { status: 404 });
+      return NextResponse.json({ error: 'Category not found' }, { status: 404 });
     }
   }
 

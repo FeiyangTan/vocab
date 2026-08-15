@@ -20,7 +20,7 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as { name?: unknown } | null;
   const name = cleanCategoryName(body?.name);
   if (!name) {
-    return NextResponse.json({ error: '分类名不能为空' }, { status: 400 });
+    return NextResponse.json({ error: 'Category name cannot be empty' }, { status: 400 });
   }
 
   const db = getDb();
@@ -33,7 +33,7 @@ export async function POST(request: Request) {
     .where(eq(categories.name, name))
     .limit(1);
   if (dup) {
-    return NextResponse.json({ error: `已经有一个叫「${name}」的分类了` }, { status: 409 });
+    return NextResponse.json({ error: `A category named ${name} already exists` }, { status: 409 });
   }
 
   // 排在最后。sortOrder 目前只由新建顺序决定，没有拖拽排序

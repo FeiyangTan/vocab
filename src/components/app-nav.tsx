@@ -8,12 +8,12 @@ import { cn } from '@/lib/utils';
 export type NavCounts = { due: number; pending: number; words: number; categories: number };
 
 const ITEMS = [
-  { href: '/review', label: '复习', icon: Layers, key: 'due' },
-  { href: '/inbox', label: '收集箱', icon: Inbox, key: 'pending' },
-  { href: '/words', label: '词汇', icon: BookText, key: 'words' },
-  { href: '/categories', label: '分类', icon: Tags, key: 'categories' },
+  { href: '/review', label: 'Review', icon: Layers, key: 'due' },
+  { href: '/inbox', label: 'Inbox', icon: Inbox, key: 'pending' },
+  { href: '/words', label: 'Words', icon: BookText, key: 'words' },
+  { href: '/categories', label: 'Categories', icon: Tags, key: 'categories' },
   // 用量不是「待办数」，标个数字没意义，所以 key 给 null
-  { href: '/usage', label: '用量', icon: Coins, key: null },
+  { href: '/usage', label: 'Usage', icon: Coins, key: null },
 ] as const;
 
 function useActive() {

@@ -39,7 +39,7 @@ export function LemmaRow({ wordId, lemma }: { wordId: number; lemma: string }) {
     setBusy(false);
     if (!response.ok) {
       const data = (await response.json().catch(() => ({}))) as { error?: string };
-      setError(data.error ?? '改名失败');
+      setError(data.error ?? 'Rename failed');
       return; // 不关输入框
     }
     setEditing(false);
@@ -81,7 +81,7 @@ export function LemmaRow({ wordId, lemma }: { wordId: number; lemma: string }) {
         variant="ghost"
         size="icon-sm"
         className="shrink-0"
-        aria-label="修改单词"
+        aria-label="Edit the word"
         onClick={() => {
           setDraft(lemma);
           setEditing(true);

@@ -163,7 +163,7 @@ export function ReviewList({
       };
 
       if (!response.ok) {
-        lastError = data.error ?? '失败';
+        lastError = data.error ?? 'Failed';
         break; // 整块是一个事务，失败就是整块没写，没必要继续
       }
 
@@ -177,9 +177,9 @@ export function ReviewList({
     setCurrentId(null);
     if (lastError) setError(lastError);
     setNotice(
-      `确认了 ${ok} 条` +
-        (skipped > 0 ? `，${skipped} 条已经处理过了` : '') +
-        (lastError ? `，剩下的没写` : ''),
+      `Confirmed ${ok}` +
+        (skipped > 0 ? `, ${skipped} already handled` : '') +
+        (lastError ? `, the rest were not written` : ''),
     );
     router.refresh();
   }
@@ -212,7 +212,7 @@ export function ReviewList({
       };
 
       if (!response.ok) {
-        setError(data.error ?? '处理失败');
+        setError(data.error ?? 'Processing failed');
         break;
       }
 
@@ -229,10 +229,10 @@ export function ReviewList({
     setRunning(false);
     setNotice(
       total === 0
-        ? '这一批没有产出草稿，再点一次试试'
+        ? 'This batch produced no drafts — try again'
         : left > 0
-          ? `已整理 ${total} 条，还剩 ${left} 条待整理`
-          : `已整理 ${total} 条，全部整理完了`,
+          ? `Drafted ${total}, ${left} still waiting`
+          : `Drafted ${total} — all done`,
     );
   }
 
@@ -247,7 +247,7 @@ export function ReviewList({
       {running ? (
         <div className="mb-2 flex items-center justify-between gap-3 border border-border px-3 py-2 text-sm">
           <span className="text-muted-foreground">
-            正在整理…已完成 {processed} 条{unprocessed > 0 && `，还剩 ${unprocessed} 条`}
+            Drafting… {processed} done{unprocessed > 0 && `, ${unprocessed} left`}
           </span>
           <Button
             size="sm"
@@ -257,7 +257,7 @@ export function ReviewList({
               stopped.current = true;
             }}
           >
-            停止
+            Stop
           </Button>
         </div>
       ) : (
@@ -269,8 +269,8 @@ export function ReviewList({
               className="flex-1 font-normal"
             >
               {unprocessed > PROCESS_BATCH_SIZE
-                ? `处理 ${PROCESS_BATCH_SIZE} 条`
-                : `处理 ${unprocessed} 条待整理`}
+                ? `Process ${PROCESS_BATCH_SIZE}`
+                : `Process ${unprocessed} waiting`}
             </Button>
             {/* 数量写在按钮上，点下去要花几次 Claude 调用一眼可见，不另做确认弹窗 */}
             {unprocessed > PROCESS_BATCH_SIZE && (
@@ -279,7 +279,7 @@ export function ReviewList({
                 onClick={() => runBatches(true)}
                 className="flex-1 font-normal"
               >
-                处理全部（{unprocessed} 条）
+                Process all ({unprocessed})
               </Button>
             )}
           </div>
@@ -292,20 +292,20 @@ export function ReviewList({
 
       {!current ? (
         <p className="py-16 text-center text-sm text-muted-foreground">
-          {unprocessed > 0 ? '点上面的按钮开始整理' : '收集箱是空的'}
+          {unprocessed > 0 ? 'Use the button above to start drafting' : 'Inbox is empty'}
         </p>
       ) : (
         <>
           <div className="mb-3 flex items-center justify-between">
             <span className="text-xs text-muted-foreground">
-              第 {safeIdx + 1} / {items.length} 条
+              {safeIdx + 1} / {items.length}
             </span>
             {/* 手势在桌面不可发现，得有个看得见的入口 */}
             <div className="flex items-center gap-1">
               <Button
                 size="icon-sm"
                 variant="ghost"
-                aria-label="上一条"
+                aria-label="Previous"
                 disabled={safeIdx === 0}
                 onClick={() => go(-1)}
               >
@@ -314,7 +314,7 @@ export function ReviewList({
               <Button
                 size="icon-sm"
                 variant="ghost"
-                aria-label="下一条"
+                aria-label="Next"
                 disabled={safeIdx >= items.length - 1}
                 onClick={() => go(1)}
               >
@@ -426,7 +426,7 @@ function ReviewCard({
       return;
     }
     const data = (await response.json().catch(() => ({}))) as { error?: string };
-    setError(data.error ?? '失败');
+    setError(data.error ?? 'Failed');
     setPending(null);
   }
 
@@ -434,7 +434,7 @@ function ReviewCard({
     <Card className="gap-5 border-0 bg-transparent p-0 ring-0">
       <div>
         <div className="mb-1 text-xs text-muted-foreground">
-          原文 · {item.source} · {new Date(item.createdAt).toLocaleDateString()}
+          Original · {item.source} · {new Date(item.createdAt).toLocaleDateString()}
         </div>
         <p className="whitespace-pre-wrap font-serif text-[15px] leading-relaxed">{item.rawText}</p>
       </div>
@@ -443,7 +443,7 @@ function ReviewCard({
 
       <div className="space-y-3">
         <Field
-          label="目标词"
+          label="Target"
           value={target}
           onChange={(v) => {
             setTarget(v);
@@ -452,7 +452,7 @@ function ReviewCard({
           serif
         />
         <Field
-          label="词形还原"
+          label="Lemma"
           value={lemma}
           onChange={(v) => {
             setLemma(v);
@@ -463,7 +463,7 @@ function ReviewCard({
         <div className="flex gap-3">
           <div className="w-20 shrink-0">
             <Field
-              label="词性"
+              label="Part of speech"
               value={pos}
               onChange={(v) => {
                 setPos(v);
@@ -473,7 +473,7 @@ function ReviewCard({
           </div>
           <div className="min-w-0 flex-1">
             <Field
-              label="释义"
+              label="Definition"
               value={definition}
               onChange={(v) => {
                 setDefinition(v);
@@ -485,24 +485,24 @@ function ReviewCard({
 
         {/* 只读 —— 归类是存入时定的。显示出来是因为「这条进了哪儿」不该是盲区 */}
         <div>
-          <div className="mb-1 text-xs text-muted-foreground">归类</div>
+          <div className="mb-1 text-xs text-muted-foreground">Category</div>
           {categoryName ? (
             <p className="text-sm">{categoryName}</p>
           ) : (
-            <p className="text-sm text-destructive">还没有分类，先去「分类」建一个</p>
+            <p className="text-sm text-destructive">No categories yet — create one under Categories</p>
           )}
         </div>
 
         <div>
           <div className="mb-1 text-xs text-muted-foreground">
-            例句
+            Example
             {/*
               `generated` 现在覆盖两种情况：整句由 AI 造的（只输入了一个词），
               以及半截话被 AI 补成了完整句。后者里那半句是他真遇到的，
               所以不能再说「AI 造的」—— 统一说成「不是你原样遇到的」。
             */}
             {d.generated && (
-              <span className="ml-2 text-amber-600">⚠ 不是你原样遇到的，AI 补过或造过</span>
+              <span className="ml-2 text-amber-600">⚠ Not exactly what you met — AI completed or wrote it</span>
             )}
           </div>
           <Textarea
@@ -518,8 +518,8 @@ function ReviewCard({
 
         <div>
           <div className="mb-1 text-xs text-muted-foreground">
-            挖空（复习时的正面）
-            {noContext && <span className="ml-2 text-amber-600">⚠ 没挖空</span>}
+            Cloze (front of the card)
+            {noContext && <span className="ml-2 text-amber-600">⚠ nothing blanked</span>}
           </div>
           <Textarea
             value={cloze}
@@ -534,7 +534,7 @@ function ReviewCard({
 
         <div>
           <div className="mb-1 text-xs text-muted-foreground">
-            对比词（复习时在背面显示）
+            Confusables (shown on the back)
           </div>
           <ContrastEditor
             value={contrasts}
@@ -547,7 +547,7 @@ function ReviewCard({
         </div>
 
         <div>
-          <div className="mb-1 text-xs text-muted-foreground">备注（手写，AI 不填）</div>
+          <div className="mb-1 text-xs text-muted-foreground">Note (yours — AI never fills this)</div>
           <Textarea
             value={remark}
             maxLength={MAX_REMARK}
@@ -556,7 +556,7 @@ function ReviewCard({
               edit('remark', e.target.value.trim() || null);
             }}
             rows={2}
-            placeholder="为什么难记、在哪儿见过…"
+            placeholder="Why it's tricky, where you saw it…"
             className="text-sm"
           />
         </div>
@@ -572,7 +572,7 @@ function ReviewCard({
           onClick={() => send('discard')}
           disabled={pending !== null || confirming !== null}
         >
-          {pending === 'discard' ? '…' : '丢弃'}
+          {pending === 'discard' ? '…' : 'Discard'}
         </Button>
         {/*
           全部确认要点两次：第一次上膛只变文案，第二次才真的写。
@@ -586,17 +586,17 @@ function ReviewCard({
           disabled={pending !== null || confirming !== null || categoryId === null}
         >
           {confirming
-            ? `正在确认…${confirming.done} / ${confirming.total}`
+            ? `Confirming… ${confirming.done} / ${confirming.total}`
             : armed
-              ? `确定？全部 ${total} 条`
-              : `全部确认（${total}）`}
+              ? `Sure? All ${total}`
+              : `Confirm all (${total})`}
         </Button>
         <Button
           className="flex-1"
           onClick={() => send('confirm')}
           disabled={pending !== null || confirming !== null || categoryId === null}
         >
-          {pending === 'confirm' ? '…' : '确认'}
+          {pending === 'confirm' ? '…' : 'Confirm'}
         </Button>
       </div>
     </Card>

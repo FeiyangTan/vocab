@@ -25,7 +25,7 @@ export async function POST(request: Request) {
   if (body?.categoryId !== undefined && body.categoryId !== null) {
     categoryId = parseCategoryId(body.categoryId);
     if (!categoryId) {
-      return NextResponse.json({ error: 'categoryId 必须是分类 id' }, { status: 400 });
+      return NextResponse.json({ error: 'categoryId must be a category id' }, { status: 400 });
     }
   }
 

@@ -20,7 +20,7 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as { categoryId?: unknown } | null;
   const scope = parseScope(body?.categoryId);
   if (scope === null) {
-    return NextResponse.json({ error: "categoryId 必须是分类 id 或 'all'" }, { status: 400 });
+    return NextResponse.json({ error: "categoryId must be a category id or 'all'" }, { status: 400 });
   }
 
   const db = getDb();
@@ -31,7 +31,7 @@ export async function POST(request: Request) {
       .where(eq(categories.id, scope))
       .limit(1);
     if (!category) {
-      return NextResponse.json({ error: '分类不存在' }, { status: 404 });
+      return NextResponse.json({ error: 'Category not found' }, { status: 404 });
     }
   }
 

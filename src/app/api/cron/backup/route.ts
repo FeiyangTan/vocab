@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret) {
-    return NextResponse.json({ error: 'CRON_SECRET 未配置' }, { status: 500 });
+    return NextResponse.json({ error: 'CRON_SECRET is not configured' }, { status: 500 });
   }
 
   const auth = request.headers.get('authorization') ?? '';

@@ -41,7 +41,7 @@ export function CategoryList({ initial }: { initial: CategoryRow[] }) {
     setBusy(false);
     if (!response.ok) {
       const data = (await response.json().catch(() => ({}))) as { error?: string };
-      setError(data.error ?? '操作失败');
+      setError(data.error ?? 'Operation failed');
       return false;
     }
     router.refresh();
@@ -125,7 +125,7 @@ export function CategoryList({ initial }: { initial: CategoryRow[] }) {
                     <Button
                       size="icon-sm"
                       variant="ghost"
-                      aria-label="保存"
+                      aria-label="Save"
                       disabled={busy}
                       onClick={() => void rename(row.id)}
                     >
@@ -134,7 +134,7 @@ export function CategoryList({ initial }: { initial: CategoryRow[] }) {
                     <Button
                       size="icon-sm"
                       variant="ghost"
-                      aria-label="取消"
+                      aria-label="Cancel"
                       onClick={() => setEditing(null)}
                     >
                       <X className="size-4" />
@@ -147,14 +147,14 @@ export function CategoryList({ initial }: { initial: CategoryRow[] }) {
                     <span className="truncate font-serif text-xl font-medium">{row.name}</span>
                     {row.isDefault && (
                       <span className="shrink-0 text-[11px] uppercase tracking-[0.14em] text-primary">
-                        默认
+                        Default
                       </span>
                     )}
                   </div>
 
                   <div className="flex shrink-0 items-center gap-1">
                     <span className="mr-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-                      {row.wordCount} 词
+                      {row.wordCount} words
                     </span>
                     {!row.isDefault && (
                       <Button
@@ -164,13 +164,13 @@ export function CategoryList({ initial }: { initial: CategoryRow[] }) {
                         disabled={busy}
                         onClick={() => void makeDefault(row.id)}
                       >
-                        设为默认
+                        Make default
                       </Button>
                     )}
                     <Button
                       size="icon-sm"
                       variant="ghost"
-                      aria-label={`重命名 ${row.name}`}
+                      aria-label={`Rename ${row.name}`}
                       onClick={() => {
                         setEditing(row.id);
                         setDraft(row.name);
@@ -182,8 +182,8 @@ export function CategoryList({ initial }: { initial: CategoryRow[] }) {
                     <Button
                       size="icon-sm"
                       variant="ghost"
-                      aria-label={`删除 ${row.name}`}
-                      title={isLast ? '至少要留一个分类' : undefined}
+                      aria-label={`Delete ${row.name}`}
+                      title={isLast ? 'You must keep at least one category' : undefined}
                       disabled={isLast || busy}
                       onClick={() => startDelete(row)}
                     >
@@ -199,7 +199,7 @@ export function CategoryList({ initial }: { initial: CategoryRow[] }) {
                 {row.wordCount > 0 ? (
                   <>
                     <p className="text-sm">
-                      「{row.name}」里还有 {row.wordCount} 个词，先转到：
+                      {row.name} still has {row.wordCount} words — move them to:
                     </p>
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {initial
@@ -218,7 +218,7 @@ export function CategoryList({ initial }: { initial: CategoryRow[] }) {
                     </div>
                   </>
                 ) : (
-                  <p className="text-sm">删除「{row.name}」？里面没有词。</p>
+                  <p className="text-sm">Delete {row.name}? It has no words.</p>
                 )}
 
                 <div className="mt-3 flex gap-2">
@@ -228,7 +228,7 @@ export function CategoryList({ initial }: { initial: CategoryRow[] }) {
                     className="font-normal"
                     onClick={() => setDeleting(null)}
                   >
-                    取消
+                    Cancel
                   </Button>
                   <Button
                     size="sm"
@@ -237,7 +237,7 @@ export function CategoryList({ initial }: { initial: CategoryRow[] }) {
                     disabled={busy || (row.wordCount > 0 && !moveTo)}
                     onClick={() => void remove(row)}
                   >
-                    {row.wordCount > 0 ? '转移并删除' : '删除'}
+                    {row.wordCount > 0 ? 'Move and delete' : 'Delete'}
                   </Button>
                 </div>
               </div>
@@ -253,7 +253,7 @@ export function CategoryList({ initial }: { initial: CategoryRow[] }) {
               autoFocus
               value={newName}
               maxLength={MAX_CATEGORY_NAME}
-              placeholder="分类名"
+              placeholder="Category name"
               onChange={(e) => setNewName(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') void create();
@@ -265,7 +265,7 @@ export function CategoryList({ initial }: { initial: CategoryRow[] }) {
               className="h-8 max-w-48"
             />
             <Button size="sm" className="font-normal" disabled={busy} onClick={() => void create()}>
-              新建
+              Create
             </Button>
             <Button
               size="sm"
@@ -276,7 +276,7 @@ export function CategoryList({ initial }: { initial: CategoryRow[] }) {
                 setAdding(false);
               }}
             >
-              取消
+              Cancel
             </Button>
           </div>
         ) : (
@@ -287,7 +287,7 @@ export function CategoryList({ initial }: { initial: CategoryRow[] }) {
             onClick={() => setAdding(true)}
           >
             <Plus className="size-3.5" />
-            新建分类
+            New category
           </Button>
         )}
       </div>

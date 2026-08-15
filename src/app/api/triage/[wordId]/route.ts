@@ -35,7 +35,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ wordId: st
 
   const action = body?.action;
   if (action !== 'known' && action !== 'unknown') {
-    return NextResponse.json({ error: "action 只能是 'known' 或 'unknown'" }, { status: 400 });
+    return NextResponse.json({ error: "action must be 'known' or 'unknown'" }, { status: 400 });
   }
 
   const db = getDb();
@@ -46,7 +46,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ wordId: st
     .where(eq(words.id, id))
     .limit(1);
   if (!word) {
-    return NextResponse.json({ error: '词不存在' }, { status: 404 });
+    return NextResponse.json({ error: 'Word not found' }, { status: 404 });
   }
 
   if (action === 'known') {
@@ -59,7 +59,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ wordId: st
   const scope = parseScope(body?.scope) ?? word.categoryId;
   // 没排过位置说明它还没进队列（正常路径下 GET 已经排过了），排位置是 GET 的活
   if (word.triageOrder === null) {
-    return NextResponse.json({ error: '这个词还没进队列' }, { status: 409 });
+    return NextResponse.json({ error: 'This word is not in the queue yet' }, { status: 409 });
   }
   await db.execute(pushBack(scope, id));
   return NextResponse.json({ ok: true });

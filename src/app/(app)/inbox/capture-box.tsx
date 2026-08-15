@@ -59,7 +59,7 @@ export function CaptureBox({
     setPending(false);
     if (!response.ok) {
       const data = (await response.json().catch(() => ({}))) as { error?: string };
-      setError(data.error ?? '存入失败');
+      setError(data.error ?? 'Failed to save');
       return;
     }
     setText('');
@@ -79,13 +79,13 @@ export function CaptureBox({
           }
         }}
         rows={3}
-        placeholder="粘贴英文句子，或一行一个单词。carve (cave) —— 括号里的当对比词"
+        placeholder="Paste an English sentence, or one word per line. carve (cave) — the part in parentheses becomes a confusable"
         className="resize-y font-serif text-[15px] leading-relaxed"
       />
 
       {categories.length > 1 && (
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          <span className="mr-1 text-xs text-muted-foreground">存到</span>
+          <span className="mr-1 text-xs text-muted-foreground">Save to</span>
           {categories.map((c) => (
             <Button
               key={c.id}
@@ -103,22 +103,22 @@ export function CaptureBox({
       <div className="mt-2 flex items-center justify-between gap-3">
         <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
           <Checkbox checked={asOne} onCheckedChange={(v) => setAsOne(v === true)} />
-          整段当一条
+          Whole block as one
         </label>
 
         <div className="flex items-center gap-3">
           <span className="text-xs text-muted-foreground">
-            {willSave > 0 ? `将存入 ${willSave} 条 · ⌘↩` : '⌘↩ 存入'}
+            {willSave > 0 ? `Save ${willSave} · ⌘↩` : '⌘↩ Save'}
           </span>
           <Button size="sm" onClick={submit} disabled={pending || willSave === 0}>
-            {pending ? '…' : '存入'}
+            {pending ? '…' : 'Save'}
           </Button>
         </div>
       </div>
 
       {!asOne && lines.length > 1 && (
         <p className="mt-1.5 text-xs text-muted-foreground">
-          从 PDF 或电子书复制的句子常带排版折行 —— 那种情况勾上「整段当一条」
+          Text copied from PDFs or e-books often has hard line breaks — tick “Whole block as one” for that
         </p>
       )}
 

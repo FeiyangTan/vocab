@@ -56,7 +56,7 @@ export function NoteRow({
         value={draft}
         rows={2}
         disabled={busy}
-        placeholder="中文释义"
+        placeholder="Chinese definition"
         onChange={(e) => setDraft(e.target.value)}
         onBlur={save}
         onKeyDown={(e) => {
@@ -86,7 +86,7 @@ export function NoteRow({
         }}
       >
         <Plus className="size-3.5" />
-        释义
+        Definition
       </Button>
     );
   }
@@ -101,7 +101,7 @@ export function NoteRow({
         variant="ghost"
         size="icon-sm"
         className="shrink-0"
-        aria-label="编辑释义"
+        aria-label="Edit definition"
         onClick={() => {
           setDraft(note);
           setEditing(true);

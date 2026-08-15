@@ -17,7 +17,7 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
     .returning({ id: inbox.id });
 
   if (updated.length === 0) {
-    return NextResponse.json({ error: '这条已经处理过了' }, { status: 409 });
+    return NextResponse.json({ error: 'This item was already handled' }, { status: 409 });
   }
   return NextResponse.json({ ok: true });
 }

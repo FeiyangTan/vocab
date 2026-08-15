@@ -143,7 +143,7 @@ export function WordList({
     });
     if (!response.ok) {
       const data = (await response.json().catch(() => ({}))) as { error?: string };
-      setError(data.error ?? '重排失败');
+      setError(data.error ?? 'Reorder failed');
       return;
     }
     router.refresh();
@@ -180,7 +180,7 @@ export function WordList({
       if (!response.ok) {
         const data = (await response.json().catch(() => ({}))) as { error?: string };
         setOrder(before); // 回滚
-        setError(data.error ?? '改分类失败');
+        setError(data.error ?? 'Failed to change category');
         return;
       }
       router.refresh();
@@ -205,7 +205,7 @@ export function WordList({
     if (!response.ok) {
       const data = (await response.json().catch(() => ({}))) as { error?: string };
       setOrder(before);
-      setError(data.error ?? '排序失败');
+      setError(data.error ?? 'Sorting failed');
     }
   }
 
@@ -219,7 +219,7 @@ export function WordList({
       {/* 只有一个分类时没得筛，这排就别占地方 */}
       {chips.length > 1 && (
         <div className="mb-6 flex flex-wrap items-baseline gap-x-4 gap-y-1.5">
-          <FilterChip href="/words" label="全部" count={total} active={activeCategory === null} />
+          <FilterChip href="/words" label="All" count={total} active={activeCategory === null} />
           {chips.map((c) => (
             <FilterChip
               key={c.id}
@@ -246,11 +246,11 @@ export function WordList({
           variant="ghost"
           size="sm"
           className="font-normal text-muted-foreground"
-          title="常见的排前面。新确认的词落在末尾，点这个让它归位"
+          title="Common words first. Newly confirmed words land at the end — this puts them in place"
           onClick={() => void sortByFrequency()}
         >
           <ArrowDownWideNarrow className="size-3.5" />
-          按词频重排
+          Sort by frequency
         </Button>
         <Button
           variant="ghost"
@@ -263,29 +263,29 @@ export function WordList({
           ) : (
             <ChevronsUpDown className="size-3.5" />
           )}
-          {allExpanded ? '全部收起' : '全部展开'}
+          {allExpanded ? 'Collapse all' : 'Expand all'}
         </Button>
         <Button
           variant="ghost"
           size="sm"
           className="font-normal text-muted-foreground"
           aria-pressed={showPhonetics}
-          title="美式音标（CMUdict）"
+          title="US phonetics (CMUdict)"
           onClick={() => setShowPhonetics((v) => !v)}
         >
           <Volume2 className={cn('size-3.5', !showPhonetics && 'opacity-40')} />
-          {showPhonetics ? '隐藏音标' : '显示音标'}
+          {showPhonetics ? 'Hide phonetics' : 'Show phonetics'}
         </Button>
         <Button
           variant="ghost"
           size="sm"
           className="font-normal text-muted-foreground"
           aria-pressed={showGlosses}
-          title="对比词 hover 1.2 秒后弹出的中文"
+          title="Chinese shown when hovering a confusable for 1.2s"
           onClick={() => setShowGlosses((v) => !v)}
         >
           <Languages className={cn('size-3.5', !showGlosses && 'opacity-40')} />
-          {showGlosses ? '隐藏对比词释义' : '显示对比词释义'}
+          {showGlosses ? 'Hide confusable glosses' : 'Show confusable glosses'}
         </Button>
         <Button
           variant="ghost"
@@ -294,7 +294,7 @@ export function WordList({
           onClick={() => setRevealed(allShown ? new Set() : new Set(order.map((w) => w.id)))}
         >
           {allShown ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-          {allShown ? '隐藏中文' : '显示中文'}
+          {allShown ? 'Hide Chinese' : 'Show Chinese'}
         </Button>
       </div>
 
@@ -336,10 +336,10 @@ export function WordList({
           <PageLink
             href={pageHref(activeCategory, page - 1)}
             disabled={page <= 1}
-            label="上一页"
+            label="Previous page"
           >
             <ChevronLeft className="size-4" />
-            上一页
+            Previous
           </PageLink>
           <span className="tabular-nums text-muted-foreground">
             {page} / {totalPages}
@@ -347,9 +347,9 @@ export function WordList({
           <PageLink
             href={pageHref(activeCategory, page + 1)}
             disabled={page >= totalPages}
-            label="下一页"
+            label="Next page"
           >
-            下一页
+            Next
             <ChevronRight className="size-4" />
           </PageLink>
         </div>

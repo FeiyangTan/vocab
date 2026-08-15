@@ -27,7 +27,7 @@ export async function DELETE(_request: Request, ctx: { params: Promise<{ id: str
     .returning({ id: words.id, lemma: words.lemma });
 
   if (deleted.length === 0) {
-    return NextResponse.json({ error: '词不存在' }, { status: 404 });
+    return NextResponse.json({ error: 'Word not found' }, { status: 404 });
   }
   return NextResponse.json({ ok: true, lemma: deleted[0].lemma });
 }
@@ -62,7 +62,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     lemma?: unknown;
     categoryId?: unknown;
   } | null;
-  if (!body) return NextResponse.json({ error: '空请求' }, { status: 400 });
+  if (!body) return NextResponse.json({ error: 'Empty request' }, { status: 400 });
 
   const db = getDb();
 
@@ -72,14 +72,14 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     .where(eq(words.id, id))
     .limit(1);
   if (!word) {
-    return NextResponse.json({ error: '词不存在' }, { status: 404 });
+    return NextResponse.json({ error: 'Word not found' }, { status: 404 });
   }
 
   // ---- 改词 ----
   if (body.lemma !== undefined) {
     const lemma = typeof body.lemma === 'string' ? body.lemma.trim().slice(0, 80) : '';
     if (!lemma) {
-      return NextResponse.json({ error: '单词不能为空' }, { status: 400 });
+      return NextResponse.json({ error: 'Word cannot be empty' }, { status: 400 });
     }
     try {
       // 词频跟着换 —— 不重算的话新词会挂着旧词的 zipf，排序和档位条全是错的
@@ -90,7 +90,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     } catch (error) {
       if (isUniqueViolation(error)) {
         return NextResponse.json(
-          { error: `这个分类里已经有 ${lemma} 了` },
+          { error: `This category already has ${lemma}` },
           { status: 409 },
         );
       }
@@ -102,7 +102,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   // ---- 换分类 ----
   const categoryId = parseCategoryId(body.categoryId);
   if (!categoryId) {
-    return NextResponse.json({ error: 'categoryId 必须是分类 id' }, { status: 400 });
+    return NextResponse.json({ error: 'categoryId must be a category id' }, { status: 400 });
   }
 
   const [category] = await db
@@ -111,7 +111,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     .where(eq(categories.id, categoryId))
     .limit(1);
   if (!category) {
-    return NextResponse.json({ error: '分类不存在' }, { status: 400 });
+    return NextResponse.json({ error: 'Category not found' }, { status: 400 });
   }
 
   const [{ max }] = await db
@@ -128,7 +128,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     // 23505 = unique_violation，撞的是 (lemma, category_id) 那个唯一索引
     if (isUniqueViolation(error)) {
       return NextResponse.json(
-        { error: `「${category.name}」里已经有 ${word.lemma} 了` },
+        { error: `${category.name} already has ${word.lemma}` },
         { status: 409 },
       );
     }

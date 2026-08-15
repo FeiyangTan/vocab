@@ -32,7 +32,7 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
     .where(eq(words.id, id))
     .limit(1);
   if (!word) {
-    return NextResponse.json({ error: '词不存在' }, { status: 404 });
+    return NextResponse.json({ error: 'Word not found' }, { status: 404 });
   }
 
   let suggested: string[];

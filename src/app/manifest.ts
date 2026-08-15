@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: 'vocab',
     short_name: 'vocab',
-    description: '个人英语单词记录与复习',
+    description: 'Capture and review English vocabulary',
     start_url: '/',
     display: 'standalone',
     background_color: '#14120f',

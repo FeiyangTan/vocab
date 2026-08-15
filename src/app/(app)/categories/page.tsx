@@ -9,8 +9,8 @@ export default async function CategoriesPage() {
   return (
     <main className="mx-auto w-full max-w-2xl p-4 md:p-8">
       <div className="mb-6 flex items-baseline justify-between">
-        <h1 className="font-serif text-2xl font-medium tracking-tight">分类</h1>
-        <span className="text-sm text-muted-foreground">{rows.length} 个</span>
+        <h1 className="font-serif text-2xl font-medium tracking-tight">Categories</h1>
+        <span className="text-sm text-muted-foreground">{rows.length} total</span>
       </div>
 
       <CategoryList initial={rows} />

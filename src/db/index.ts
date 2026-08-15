@@ -19,7 +19,7 @@ let cached: ReturnType<typeof drizzle<typeof schema>> | null = null;
 export function getDb() {
   if (!cached) {
     const url = process.env.DATABASE_URL;
-    if (!url) throw new Error('DATABASE_URL 未配置');
+    if (!url) throw new Error('DATABASE_URL is not configured');
     cached = drizzle(new Pool({ connectionString: url }), { schema });
   }
   return cached;

@@ -21,7 +21,7 @@ export async function PUT(request: Request, ctx: { params: Promise<{ id: string 
   const body = (await request.json().catch(() => null)) as { contrasts?: unknown } | null;
   const contrasts = cleanContrasts(body?.contrasts);
   if (!contrasts) {
-    return NextResponse.json({ error: 'contrasts 必须是字符串数组' }, { status: 400 });
+    return NextResponse.json({ error: 'contrasts must be an array of strings' }, { status: 400 });
   }
 
   const updated = await getDb()
@@ -31,7 +31,7 @@ export async function PUT(request: Request, ctx: { params: Promise<{ id: string 
     .returning({ id: words.id });
 
   if (updated.length === 0) {
-    return NextResponse.json({ error: '词不存在' }, { status: 404 });
+    return NextResponse.json({ error: 'Word not found' }, { status: 404 });
   }
   // 带上中文，前端新加的词立刻就有 tooltip，不用刷新
   return NextResponse.json({ ok: true, contrasts, glosses: contrastHintsFor(contrasts) });

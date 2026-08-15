@@ -50,7 +50,7 @@ export function RemarkRow({
         maxLength={MAX_REMARK}
         rows={2}
         disabled={busy}
-        placeholder="为什么难记、在哪儿见过…"
+        placeholder="Why it's tricky, where you saw it…"
         onChange={(e) => setDraft(e.target.value)}
         onBlur={save}
         onKeyDown={(e) => {
@@ -80,7 +80,7 @@ export function RemarkRow({
         }}
       >
         <Plus className="size-3.5" />
-        备注
+        Note
       </Button>
     );
   }
@@ -93,7 +93,7 @@ export function RemarkRow({
         variant="ghost"
         size="icon-sm"
         className="shrink-0"
-        aria-label="编辑备注"
+        aria-label="Edit note"
         onClick={() => {
           setDraft(remark);
           setEditing(true);

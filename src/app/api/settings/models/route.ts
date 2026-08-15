@@ -18,10 +18,10 @@ export async function PUT(request: Request) {
   } | null;
 
   if (!isValidPurpose(body?.purpose)) {
-    return NextResponse.json({ error: 'purpose 不认识' }, { status: 400 });
+    return NextResponse.json({ error: 'Unknown purpose' }, { status: 400 });
   }
   if (!isValidModel(body?.model)) {
-    return NextResponse.json({ error: '这个模型不在可选列表里' }, { status: 400 });
+    return NextResponse.json({ error: 'That model is not in the allowed list' }, { status: 400 });
   }
 
   await setModel(body.purpose, body.model);

@@ -17,8 +17,8 @@ export const PURPOSES = ['process', 'contrast'] as const;
 export type Purpose = (typeof PURPOSES)[number];
 
 export const PURPOSE_LABEL: Record<Purpose, string> = {
-  process: '整理草稿',
-  contrast: '对比词匹配',
+  process: 'Draft',
+  contrast: 'Confusables',
 };
 
 /**
@@ -32,14 +32,14 @@ export const PURPOSE_LABEL: Record<Purpose, string> = {
  * 那些是同档位的噪音版本，选起来只会犹豫。
  */
 export const MODEL_CHOICES = [
-  { id: 'claude-opus-5', tier: '最强', note: '$5 / $25', effort: true },
+  { id: 'claude-opus-5', tier: 'Best', note: '$5 / $25', effort: true },
   {
     id: 'claude-sonnet-5',
-    tier: '均衡',
-    note: '$2 / $10（优惠价 2026-08-31 到期，之后 $3/$15）',
+    tier: 'Balanced',
+    note: '$2 / $10 (promo ends 2026-08-31, then $3/$15)',
     effort: true,
   },
-  { id: 'claude-haiku-4-5-20251001', tier: '最便宜', note: '$1 / $5', effort: false },
+  { id: 'claude-haiku-4-5-20251001', tier: 'Cheapest', note: '$1 / $5', effort: false },
 ] as const;
 
 export type ModelId = (typeof MODEL_CHOICES)[number]['id'];
@@ -60,7 +60,7 @@ export function supportsEffort(model: ModelId): boolean {
 // 开发期就炸，别等到线上花费统计悄悄算错
 for (const choice of MODEL_CHOICES) {
   if (!PRICES[choice.id]) {
-    throw new Error(`模型 ${choice.id} 不在 pricing.ts 的单价表里，先去补单价`);
+    throw new Error(`Model ${choice.id} is missing from the price table in pricing.ts — add its pricing first`);
   }
 }
 

@@ -72,7 +72,7 @@ export function WordDetail({
       <div className="flex flex-wrap items-baseline gap-x-3 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
         <span>{category}</span>
         <span>
-          词频 {frequencyBand(zipf).label}
+          Frequency {frequencyBand(zipf).label}
           {zipf !== null && ` · Zipf ${zipf.toFixed(2)}`}
         </span>
       </div>
@@ -93,7 +93,7 @@ export function WordDetail({
           {/* 原句本身就是发音按钮，和单词、对比词一致 */}
           <button
             type="button"
-            aria-label="朗读例句"
+            aria-label="Speak the example"
             onClick={() => speak(e.rawText)}
             className="block w-full text-left font-serif text-[15px] leading-relaxed transition-colors hover:text-primary"
           >

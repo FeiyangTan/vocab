@@ -118,9 +118,9 @@ export default async function WordsPage({
   return (
     <main className="mx-auto w-full max-w-4xl p-4 md:p-8">
       <div className="mb-4 flex items-baseline justify-between">
-        <h1 className="font-serif text-2xl font-medium tracking-tight">词汇</h1>
+        <h1 className="font-serif text-2xl font-medium tracking-tight">Words</h1>
         <span className="text-sm text-muted-foreground">
-          {rows.length} / {total} 个
+          {rows.length} / {total}
         </span>
       </div>
 
@@ -135,7 +135,7 @@ export default async function WordsPage({
         phonetics={phonetics}
         page={page}
         totalPages={totalPages}
-        empty={active === null ? '还没有确认过的词' : '这个分类下还没有词'}
+        empty={active === null ? 'No confirmed words yet' : 'No words in this category yet'}
       />
     </main>
   );

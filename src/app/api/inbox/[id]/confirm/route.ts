@@ -54,7 +54,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   const body = await request.json().catch(() => null);
   const parsed = parseBody(body);
   if (!parsed) {
-    return NextResponse.json({ error: '字段不完整' }, { status: 400 });
+    return NextResponse.json({ error: 'Incomplete fields' }, { status: 400 });
   }
   const { draft, categoryId } = parsed;
   // 对比词是 word 的属性，不是 encounter 的；Draft 里那份只是留档
@@ -148,10 +148,10 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     return NextResponse.json({ ok: true, cardId });
   } catch (error) {
     if (error instanceof Error && error.message === 'NOT_PENDING') {
-      return NextResponse.json({ error: '这条已经处理过了' }, { status: 409 });
+      return NextResponse.json({ error: 'This item was already handled' }, { status: 409 });
     }
     if (error instanceof Error && error.message === 'NO_CATEGORY') {
-      return NextResponse.json({ error: '这个分类已经不存在了' }, { status: 400 });
+      return NextResponse.json({ error: 'That category no longer exists' }, { status: 400 });
     }
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }

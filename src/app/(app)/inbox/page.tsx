@@ -31,7 +31,7 @@ export default async function InboxPage() {
 
   return (
     <main className="mx-auto w-full max-w-2xl p-4 md:p-8">
-      <h1 className="mb-6 font-serif text-2xl font-medium tracking-tight">收集箱</h1>
+      <h1 className="mb-6 font-serif text-2xl font-medium tracking-tight">Inbox</h1>
 
       <InboxPanel
         items={ready.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() }))}

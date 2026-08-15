@@ -21,7 +21,7 @@ export async function PUT(request: Request) {
     ? body.ids.filter((v): v is number => typeof v === 'number' && Number.isInteger(v))
     : null;
   if (!ids || ids.length === 0 || ids.length !== new Set(ids).size) {
-    return NextResponse.json({ error: 'ids 必须是不重复的整数数组' }, { status: 400 });
+    return NextResponse.json({ error: 'ids must be an array of unique integers' }, { status: 400 });
   }
 
   try {
@@ -52,7 +52,7 @@ export async function PUT(request: Request) {
     return NextResponse.json({ ok: true, updated });
   } catch (error) {
     if (error instanceof Error && error.message === 'MISSING') {
-      return NextResponse.json({ error: '有 id 不存在' }, { status: 404 });
+      return NextResponse.json({ error: 'Some ids do not exist' }, { status: 404 });
     }
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }

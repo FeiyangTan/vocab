@@ -76,9 +76,9 @@ export default async function UsagePage() {
   return (
     <main className="mx-auto w-full max-w-2xl p-4 md:p-8">
       <div className="mb-6 flex items-baseline justify-between gap-3">
-        <h1 className="font-serif text-2xl font-medium tracking-tight">用量</h1>
+        <h1 className="font-serif text-2xl font-medium tracking-tight">Usage</h1>
         {first?.day && (
-          <span className="text-sm text-muted-foreground">开始记录于 {first.day}（UTC）</span>
+          <span className="text-sm text-muted-foreground">Recording since {first.day} (UTC)</span>
         )}
       </div>
 
@@ -92,34 +92,34 @@ export default async function UsagePage() {
 
       {total.calls === 0 ? (
         <p className="py-16 text-center text-sm text-muted-foreground">
-          还没有记录。下次用「AI 处理」或「AI 匹配对比词」时就会记上。
+          Nothing recorded yet. The next AI draft or confusable match will show up here.
         </p>
       ) : (
         <div className="space-y-8">
           <section>
             <div className="border-t border-border pt-4">
               <div className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-                总计
+                Total
               </div>
               <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-sm">
                 <span>
-                  输入 <span className="tabular-nums">{n(total.input)}</span>
+                  In <span className="tabular-nums">{n(total.input)}</span>
                 </span>
                 <span>
-                  输出 <span className="tabular-nums">{n(total.output)}</span>
+                  Out <span className="tabular-nums">{n(total.output)}</span>
                 </span>
                 {total.cacheRead > 0 && (
                   <span className="text-muted-foreground">
-                    缓存命中 <span className="tabular-nums">{n(total.cacheRead)}</span>
+                    Cache hits <span className="tabular-nums">{n(total.cacheRead)}</span>
                   </span>
                 )}
                 <span className="text-muted-foreground">
-                  调用 <span className="tabular-nums">{n(total.calls)}</span> 次
+                  <span className="tabular-nums">{n(total.calls)}</span> calls
                 </span>
               </div>
               <div className="mt-2 text-lg tabular-nums">
-                约 {formatUsd(totalCost)}
-                <span className="ml-2 text-xs text-muted-foreground">估算</span>
+                ~{formatUsd(totalCost)}
+                <span className="ml-2 text-xs text-muted-foreground">estimated</span>
               </div>
             </div>
           </section>
@@ -127,13 +127,13 @@ export default async function UsagePage() {
           <section>
             <div className="border-t border-border pt-4">
               <div className="mb-3 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-                按用途
+                By purpose
               </div>
               {byPurpose.map((row) => (
                 <div key={row.purpose} className="flex justify-between gap-3 py-1 text-sm">
                   <span>{labelOf(row.purpose)}</span>
                   <span className="text-muted-foreground tabular-nums">
-                    输入 {n(row.input)} · 输出 {n(row.output)} · {n(row.calls)} 次
+                    in {n(row.input)} · out {n(row.output)} · {n(row.calls)} calls
                   </span>
                 </div>
               ))}
@@ -143,21 +143,21 @@ export default async function UsagePage() {
           <section>
             <div className="border-t border-border pt-4">
               <div className="mb-3 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-                按模型
+                By model
               </div>
               {costs.map((row) => (
                 <div key={row.model} className="flex justify-between gap-3 py-1 text-sm">
                   <span className="font-mono text-xs">{row.model}</span>
                   <span className="text-muted-foreground tabular-nums">
-                    输入 {n(row.input)} · 输出 {n(row.output)} ·{' '}
-                    {row.cost === null ? '单价未知' : `约 ${formatUsd(row.cost)}`}
+                    in {n(row.input)} · out {n(row.output)} ·{' '}
+                    {row.cost === null ? 'no price' : `~${formatUsd(row.cost)}`}
                   </span>
                 </div>
               ))}
               {unpriced.length > 0 && (
                 <p className="mt-2 text-xs text-destructive">
-                  {unpriced.join('、')} 不在单价表里，没算进总额 —— 要算的话在
-                  src/lib/pricing.ts 里补上
+                  {unpriced.join(', ')} not in the price table, excluded from the total — add pricing in
+                  src/lib/pricing.ts
                 </p>
               )}
             </div>
@@ -166,7 +166,7 @@ export default async function UsagePage() {
           <section>
             <div className="border-t border-border pt-4">
               <div className="mb-3 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-                最近 14 天
+                Last 14 days
               </div>
               {byDay.map((row) => (
                 <div key={row.day} className="flex items-center gap-3 py-1 text-sm">
@@ -187,12 +187,13 @@ export default async function UsagePage() {
           </section>
 
           <p className="border-t border-border pt-4 text-xs text-muted-foreground">
-            只统计这个应用发出的调用，从加上这个功能那天开始记。
+            Only counts calls made by this app, starting the day this feature was added.
             <br />
-            金额是按 <span className="font-mono">src/lib/pricing.ts</span>{' '}
-            的单价表估算的，<strong className="font-medium">不是账单</strong> ——
-            没算 batch 折扣等因素。准确金额和账户余额去
-            Claude Console 看，Anthropic 没有查余额的接口。
+            Amounts are estimated from the price table in{' '}
+            <span className="font-mono">src/lib/pricing.ts</span> —{' '}
+            <strong className="font-medium">not a bill</strong>. Batch discounts and similar
+            factors are not accounted for. For exact amounts and your balance, check the
+            Claude Console; Anthropic has no balance API.
           </p>
         </div>
       )}

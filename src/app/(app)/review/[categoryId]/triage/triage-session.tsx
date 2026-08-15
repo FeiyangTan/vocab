@@ -201,7 +201,7 @@ export function TriageSession({
       };
       setLoading(false);
       if (!response.ok) {
-        setError(data.error ?? '加载失败');
+        setError(data.error ?? 'Failed to load');
         return;
       }
       const next = data.word ?? null;
@@ -237,7 +237,7 @@ export function TriageSession({
     setBusy(false);
     if (!response.ok) {
       const data = (await response.json().catch(() => ({}))) as { error?: string };
-      setError(data.error ?? '提交失败');
+      setError(data.error ?? 'Failed to submit');
       return;
     }
     // 只有「不认识」才可能原地不动，「认识」一定换人，不用提示
@@ -255,7 +255,7 @@ export function TriageSession({
     setBusy(false);
     if (!response.ok) {
       setArmed(false);
-      setError('删除失败');
+      setError('Failed to delete');
       return;
     }
     await load();
@@ -303,21 +303,21 @@ export function TriageSession({
       <div className="mb-6 flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-1">
           <Button asChild variant="ghost" size="icon-sm" className="-ml-1 shrink-0">
-            <Link href="/review" aria-label="回队列列表">
+            <Link href="/review" aria-label="Back to queues">
               <ChevronLeft className="size-4" />
             </Link>
           </Button>
           <h1 className="truncate font-serif text-2xl font-medium tracking-tight">{name}</h1>
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          <span className="text-sm text-muted-foreground">剩 {remaining} 个</span>
+          <span className="text-sm text-muted-foreground">{remaining} left</span>
           {/* 音标开关。图标按钮不占地方 —— 这一屏的主角是中间那个词 */}
           <Button
             variant="ghost"
             size="icon-sm"
             aria-pressed={showPhonetic}
-            aria-label={showPhonetic ? '隐藏音标' : '显示音标'}
-            title={showPhonetic ? '隐藏音标（美式，CMUdict）' : '显示音标（美式，CMUdict）'}
+            aria-label={showPhonetic ? 'Hide phonetics' : 'Show phonetics'}
+            title={showPhonetic ? 'Hide phonetics (US, CMUdict)' : 'Show phonetics (US, CMUdict)'}
             onClick={togglePhonetic}
           >
             <Volume2 className={cn('size-4', !showPhonetic && 'opacity-40')} />
@@ -332,15 +332,15 @@ export function TriageSession({
       ) : !word ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-4">
           <p className="text-sm text-muted-foreground">
-            {roundOver ? '这一轮过完了' : '这个分类还没有词'}
+            {roundOver ? 'Round finished' : 'No words in this category yet'}
           </p>
           {roundOver && (
             <Button variant="outline" disabled={busy} onClick={() => void again()}>
-              再来一轮
+              New round
             </Button>
           )}
           <Button asChild variant="ghost" size="sm">
-            <Link href="/review">回队列列表</Link>
+            <Link href="/review">Back to queues</Link>
           </Button>
         </div>
       ) : (
@@ -362,8 +362,8 @@ export function TriageSession({
             onClickCapture={onClickCapture}
           >
             {/* 上下两个提示。放在卡片**外面**，卡片跟手动它们不动 */}
-            <SwipeHint label="认识" side="up" dy={dragY} />
-            <SwipeHint label="不认识" side="down" dy={dragY} />
+            <SwipeHint label="Know" side="up" dy={dragY} />
+            <SwipeHint label="Don’t know" side="down" dy={dragY} />
 
             <div
               key={dealt}
@@ -399,7 +399,7 @@ export function TriageSession({
             <div className="flex flex-wrap items-baseline justify-center gap-x-2 gap-y-1">
               <button
                 type="button"
-                aria-label={`朗读 ${word.lemma}`}
+                aria-label={`Speak ${word.lemma}`}
                 onClick={() => speak(word.lemma)}
                 className="font-serif text-4xl font-medium transition-colors hover:text-primary"
               >
@@ -408,7 +408,7 @@ export function TriageSession({
               {showPhonetic && word.phonetic && (
                 <button
                   type="button"
-                  aria-label={`朗读 ${word.lemma}`}
+                  aria-label={`Speak ${word.lemma}`}
                   onClick={() => speak(word.lemma)}
                   className="text-sm text-muted-foreground/70 transition-colors hover:text-primary"
                 >
@@ -447,13 +447,13 @@ export function TriageSession({
                 className="mx-auto h-auto px-6 py-2.5 font-normal"
                 onClick={() => setRevealed(true)}
               >
-                看详情 <span className="ml-1 text-xs opacity-50">空格</span>
+                Details <span className="ml-1 text-xs opacity-50">space</span>
               </Button>
             )}
 
             {stuck && (
               <p className="text-center text-xs text-muted-foreground">
-                队列里只剩它了，标「不认识」还是它 —— 认识或删掉才能过完这一轮
+                It’s the only word left — marking it “don’t know” brings it right back. Know it or delete it to finish the round.
               </p>
             )}
             </div>
@@ -465,9 +465,9 @@ export function TriageSession({
               disabled={busy}
               onClick={() => void judge('unknown')}
               className="h-auto flex-1 flex-col gap-0.5 rounded-sm py-3 font-normal"
-              title={`往后挪 ${pushBack} 个，这一轮还会再碰到`}
+              title={`Moves back ${pushBack} places — you’ll see it again this round`}
             >
-              <span>不认识</span>
+              <span>Don’t know</span>
               <span className="text-[11px] tabular-nums text-muted-foreground/60">1</span>
             </Button>
             <Button
@@ -475,9 +475,9 @@ export function TriageSession({
               disabled={busy}
               onClick={() => void judge('known')}
               className="h-auto flex-1 flex-col gap-0.5 rounded-sm py-3 font-normal"
-              title="本轮不再出现"
+              title="Won’t appear again this round"
             >
-              <span>认识</span>
+              <span>Know</span>
               <span className="text-[11px] tabular-nums text-muted-foreground/60">2</span>
             </Button>
             {/* 删除和前两个不同量级 —— 不给等宽，也不给快捷键 */}
@@ -485,14 +485,14 @@ export function TriageSession({
               variant="outline"
               disabled={busy}
               onClick={() => void remove()}
-              aria-label={armed ? `确认删除 ${word.lemma}` : `删除 ${word.lemma}`}
-              title={armed ? '再点一次就删掉（连同原句和复习进度）' : '删除这个词'}
+              aria-label={armed ? `Confirm delete ${word.lemma}` : `Delete ${word.lemma}`}
+              title={armed ? 'Tap again to delete (along with its examples and review progress)' : 'Delete this word'}
               className={`h-auto shrink-0 rounded-sm px-4 font-normal ${
                 armed ? 'border-destructive text-destructive' : 'text-muted-foreground'
               }`}
             >
               <Trash2 className="size-4" />
-              {armed && <span className="text-xs">再点一次</span>}
+              {armed && <span className="text-xs">Tap again</span>}
             </Button>
           </div>
         </>

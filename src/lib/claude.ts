@@ -34,7 +34,7 @@ async function record(purpose: string, model: string, usage: Anthropic.Usage | u
       cacheWriteTokens: usage.cache_creation_input_tokens ?? 0,
     });
   } catch (error) {
-    console.error('[usage] 记录失败（不影响主流程）:', error);
+    console.error('[usage] failed to record (main flow unaffected):', error);
   }
 }
 
@@ -167,7 +167,7 @@ export async function draftFromInbox(inputs: ProcessInput[]): Promise<ProcessOut
   if (inputs.length === 0) return [];
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error('ANTHROPIC_API_KEY 未配置');
+  if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not configured');
 
   const client = new Anthropic({ apiKey });
 
@@ -198,11 +198,11 @@ export async function draftFromInbox(inputs: ProcessInput[]): Promise<ProcessOut
   await record('process', model, response.usage);
 
   if (response.stop_reason === 'refusal') {
-    throw new Error('Claude 拒绝了这次请求');
+    throw new Error('Claude refused this request');
   }
 
   const text = response.content.find((b) => b.type === 'text');
-  if (!text || text.type !== 'text') throw new Error('Claude 没有返回文本内容');
+  if (!text || text.type !== 'text') throw new Error('Claude returned no text content');
 
   const parsed = JSON.parse(text.text) as { items: ProcessOutput[] };
   return parsed.items;
@@ -249,7 +249,7 @@ const CONTRAST_SCHEMA = {
  */
 export async function suggestContrasts(lemma: string): Promise<string[]> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error('ANTHROPIC_API_KEY 未配置');
+  if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not configured');
 
   const client = new Anthropic({ apiKey });
 
@@ -269,10 +269,10 @@ export async function suggestContrasts(lemma: string): Promise<string[]> {
 
   await record('contrast', model, response.usage);
 
-  if (response.stop_reason === 'refusal') throw new Error('Claude 拒绝了这次请求');
+  if (response.stop_reason === 'refusal') throw new Error('Claude refused this request');
 
   const text = response.content.find((b) => b.type === 'text');
-  if (!text || text.type !== 'text') throw new Error('Claude 没有返回文本内容');
+  if (!text || text.type !== 'text') throw new Error('Claude returned no text content');
 
   const parsed = JSON.parse(text.text) as { words?: unknown };
   return Array.isArray(parsed.words) ? parsed.words.filter((w): w is string => typeof w === 'string') : [];

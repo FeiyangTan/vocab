@@ -16,19 +16,19 @@ export const dynamic = 'force-dynamic';
 const MODES = [
   {
     key: 'triage',
-    label: '快速过词',
-    hint: '看单词选认识/不认识，按词频过一遍',
-    empty: '这轮过完了',
-    unit: (n: number) => `剩 ${n} 个`,
+    label: 'Quick pass',
+    hint: 'See the word, mark know / don\u2019t know — by frequency',
+    empty: 'Round finished',
+    unit: (n: number) => `${n} left`,
     href: (scope: string) => `/review/${scope}/triage`,
   },
   {
     key: 'cloze',
-    label: '挖空复习',
-    hint: '看挖空句猜词，按 SM-2 排到期',
+    label: 'Cloze',
+    hint: 'Guess the word from a blanked sentence — scheduled by SM-2',
     /** 空队列时的说法 —— 「没有到期的」和「过完了」不是一回事 */
-    empty: '没有到期的',
-    unit: (n: number) => `${n} 张到期`,
+    empty: 'Nothing due',
+    unit: (n: number) => `${n} due`,
     href: (scope: string) => `/review/${scope}`,
   },
 ] as const;
@@ -81,7 +81,7 @@ export default async function ReviewPage({
     rows.reduce((acc, r) => acc + pick(r), 0);
   const all = {
     id: 0,
-    name: '全部',
+    name: 'All',
     cloze: sum((r) => r.cloze),
     triage: sum((r) => r.triage),
     total: sum((r) => r.total),
@@ -89,7 +89,7 @@ export default async function ReviewPage({
 
   return (
     <main className="mx-auto w-full max-w-2xl p-4 md:p-8">
-      <h1 className="mb-5 font-serif text-2xl font-medium tracking-tight">复习</h1>
+      <h1 className="mb-5 font-serif text-2xl font-medium tracking-tight">Review</h1>
 
       {/* 先选模式 —— 两种学习方式，不是同一个队列的两个视图 */}
       <div className="flex flex-wrap items-baseline gap-x-5 gap-y-2 border-b border-border pb-3">
@@ -113,7 +113,7 @@ export default async function ReviewPage({
 
       {rows.length === 0 ? (
         <p className="py-16 text-center text-sm text-muted-foreground">
-          还没有分类，先去<Link href="/categories" className="mx-1 underline">分类</Link>建一个
+          No categories yet — create one under <Link href="/categories" className="mx-1 underline">Categories</Link>
         </p>
       ) : (
         /* 再选分类。纸质风：靠发丝线分隔，不用盒子 */
@@ -158,7 +158,7 @@ function ScopeRow({
       <div className="min-w-0">
         <div className="truncate font-serif text-xl font-medium">{row.name}</div>
         <div className="mt-0.5 text-sm text-muted-foreground">
-          {row.total === 0 ? '还没有词' : count === 0 ? mode.empty : mode.unit(count)}
+          {row.total === 0 ? 'No words yet' : count === 0 ? mode.empty : mode.unit(count)}
         </div>
       </div>
       {!disabled && <ChevronRight className="size-4 shrink-0 text-muted-foreground" />}

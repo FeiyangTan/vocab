@@ -24,7 +24,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     name?: unknown;
     isDefault?: unknown;
   } | null;
-  if (!body) return NextResponse.json({ error: '空请求' }, { status: 400 });
+  if (!body) return NextResponse.json({ error: 'Empty request' }, { status: 400 });
 
   const db = getDb();
 
@@ -33,11 +33,11 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     .from(categories)
     .where(eq(categories.id, id))
     .limit(1);
-  if (!target) return NextResponse.json({ error: '分类不存在' }, { status: 404 });
+  if (!target) return NextResponse.json({ error: 'Category not found' }, { status: 404 });
 
   if (body.name !== undefined) {
     const name = cleanCategoryName(body.name);
-    if (!name) return NextResponse.json({ error: '分类名不能为空' }, { status: 400 });
+    if (!name) return NextResponse.json({ error: 'Category name cannot be empty' }, { status: 400 });
 
     const [dup] = await db
       .select({ id: categories.id })
@@ -45,7 +45,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       .where(and(eq(categories.name, name), ne(categories.id, id)))
       .limit(1);
     if (dup) {
-      return NextResponse.json({ error: `已经有一个叫「${name}」的分类了` }, { status: 409 });
+      return NextResponse.json({ error: `A category named ${name} already exists` }, { status: 409 });
     }
 
     await db.update(categories).set({ name }).where(eq(categories.id, id));
@@ -68,7 +68,7 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
 
   const moveTo = parseCategoryId(new URL(request.url).searchParams.get('moveTo'));
   if (moveTo === id) {
-    return NextResponse.json({ error: '不能转移到自己' }, { status: 400 });
+    return NextResponse.json({ error: 'Cannot move into itself' }, { status: 400 });
   }
 
   const db = getDb();
@@ -121,16 +121,16 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
   } catch (error) {
     const message = error instanceof Error ? error.message : '';
     if (message === 'NOT_FOUND') {
-      return NextResponse.json({ error: '分类不存在' }, { status: 404 });
+      return NextResponse.json({ error: 'Category not found' }, { status: 404 });
     }
     if (message === 'LAST_ONE') {
-      return NextResponse.json({ error: '至少要留一个分类' }, { status: 409 });
+      return NextResponse.json({ error: 'You must keep at least one category' }, { status: 409 });
     }
     if (message === 'HAS_WORDS') {
-      return NextResponse.json({ error: '这个分类里还有词，先选一个转移目标' }, { status: 409 });
+      return NextResponse.json({ error: 'This category still has words — pick where to move them first' }, { status: 409 });
     }
     if (message === 'BAD_MOVE_TO') {
-      return NextResponse.json({ error: '转移目标不存在' }, { status: 400 });
+      return NextResponse.json({ error: 'Move target not found' }, { status: 400 });
     }
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }

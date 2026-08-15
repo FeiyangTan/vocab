@@ -60,7 +60,7 @@ export function ReviewSession({
     };
     setLoading(false);
     if (!response.ok) {
-      setError(data.error ?? '加载失败');
+      setError(data.error ?? 'Failed to load');
       return;
     }
     setCard(data.card ?? null);
@@ -111,13 +111,13 @@ export function ReviewSession({
         <div className="flex min-w-0 items-center gap-1">
           {/* 常驻出口 —— 以前只有队列复习完时才有「回队列列表」，中途想换分类没地方点 */}
           <Button asChild variant="ghost" size="icon-sm" className="-ml-1 shrink-0">
-            <Link href="/review" aria-label="回队列列表">
+            <Link href="/review" aria-label="Back to queues">
               <ChevronLeft className="size-4" />
             </Link>
           </Button>
           <h1 className="truncate font-serif text-2xl font-medium tracking-tight">{name}</h1>
         </div>
-        <span className="shrink-0 text-sm text-muted-foreground">剩 {remaining} 张</span>
+        <span className="shrink-0 text-sm text-muted-foreground">{remaining} left</span>
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
@@ -126,9 +126,9 @@ export function ReviewSession({
         <p className="py-24 text-center text-sm text-muted-foreground">…</p>
       ) : !card ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-4">
-          <p className="text-sm text-muted-foreground">这个队列复习完了</p>
+          <p className="text-sm text-muted-foreground">This queue is done</p>
           <Button asChild variant="outline">
-            <Link href="/review">回队列列表</Link>
+            <Link href="/review">Back to queues</Link>
           </Button>
         </div>
       ) : (
@@ -143,7 +143,7 @@ export function ReviewSession({
                 {/* 词本身就是发音按钮，和对比词一致 —— 不再挂单独的喇叭图标 */}
                 <button
                   type="button"
-                  aria-label={`朗读 ${card.lemma}`}
+                  aria-label={`Speak ${card.lemma}`}
                   onClick={() => speak(card.lemma)}
                   className="mx-auto block font-serif text-4xl font-medium transition-colors hover:text-primary"
                 >
@@ -171,7 +171,7 @@ export function ReviewSession({
                 {/* 原句本身就是发音按钮，和单词、对比词一致 */}
                 <button
                   type="button"
-                  aria-label="朗读例句"
+                  aria-label="Speak the example"
                   onClick={() => speak(card.rawText)}
                   className="block w-full text-center font-serif text-[15px] italic leading-relaxed text-muted-foreground transition-colors hover:text-foreground"
                 >
@@ -192,7 +192,7 @@ export function ReviewSession({
                 className="mx-auto h-auto px-6 py-2.5 font-normal"
                 onClick={() => setFlipped(true)}
               >
-                翻面 <span className="ml-1 text-xs opacity-50">空格</span>
+                Flip <span className="ml-1 text-xs opacity-50">space</span>
               </Button>
             )}
           </div>

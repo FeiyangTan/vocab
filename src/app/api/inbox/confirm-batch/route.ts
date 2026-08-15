@@ -63,7 +63,7 @@ export async function POST(request: Request) {
   const categoryId = parseCategoryId(body?.categoryId);
   const items = parseItems(body?.items);
   if (!categoryId || !items) {
-    return NextResponse.json({ error: '字段不完整' }, { status: 400 });
+    return NextResponse.json({ error: 'Incomplete fields' }, { status: 400 });
   }
 
   // 同一个 id 在一批里出现两次会让 encounter/card 翻倍，先去重（保留最后一次的编辑）
@@ -224,7 +224,7 @@ export async function POST(request: Request) {
     return NextResponse.json(result);
   } catch (error) {
     if (error instanceof Error && error.message === 'NO_CATEGORY') {
-      return NextResponse.json({ error: '这个分类已经不存在了' }, { status: 400 });
+      return NextResponse.json({ error: 'That category no longer exists' }, { status: 400 });
     }
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }

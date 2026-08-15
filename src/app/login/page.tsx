@@ -28,7 +28,7 @@ export default function LoginPage() {
     }
 
     const data = (await response.json().catch(() => ({}))) as { error?: string };
-    setError(data.error ?? '登录失败');
+    setError(data.error ?? 'Sign-in failed');
     setPending(false);
   }
 
@@ -42,11 +42,11 @@ export default function LoginPage() {
           onChange={(e) => setPassword(e.target.value)}
           autoFocus
           autoComplete="current-password"
-          placeholder="密码"
+          placeholder="Password"
         />
         {error && <p className="text-sm text-destructive">{error}</p>}
         <Button type="submit" className="w-full" disabled={pending || password.length === 0}>
-          {pending ? '…' : '进入'}
+          {pending ? '…' : 'Enter'}
         </Button>
       </form>
     </main>

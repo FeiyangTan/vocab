@@ -22,7 +22,7 @@ export async function PUT(request: Request, ctx: { params: Promise<{ id: string 
 
   const body = (await request.json().catch(() => null)) as { note?: unknown } | null;
   if (!body || !('note' in body)) {
-    return NextResponse.json({ error: '缺少 note' }, { status: 400 });
+    return NextResponse.json({ error: 'Missing note' }, { status: 400 });
   }
   const raw = typeof body.note === 'string' ? body.note.trim() : '';
   const note = raw || null;
@@ -34,7 +34,7 @@ export async function PUT(request: Request, ctx: { params: Promise<{ id: string 
     .returning({ id: encounters.id });
 
   if (updated.length === 0) {
-    return NextResponse.json({ error: '记录不存在' }, { status: 404 });
+    return NextResponse.json({ error: 'Record not found' }, { status: 404 });
   }
   return NextResponse.json({ ok: true, note });
 }

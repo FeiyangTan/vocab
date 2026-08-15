@@ -139,7 +139,7 @@ export function WordCard({
           ref={setActivatorNodeRef}
           {...attributes}
           {...listeners}
-          aria-label={`拖动 ${word.lemma}`}
+          aria-label={`Drag ${word.lemma}`}
           className="-ml-1 shrink-0 cursor-grab touch-none self-center p-1 text-muted-foreground/40 transition-colors hover:text-muted-foreground active:cursor-grabbing"
         >
           <GripVertical className="size-3.5" />
@@ -152,7 +152,7 @@ export function WordCard({
           {/* 单词本身就是发音按钮 —— 旁边再挂个喇叭图标是多余的一次视觉噪音 */}
           <button
             type="button"
-            aria-label={`朗读 ${word.lemma}`}
+            aria-label={`Speak ${word.lemma}`}
             onClick={() => speak(word.lemma)}
             className="min-w-0 truncate text-left font-serif text-xl font-medium transition-colors hover:text-primary"
           >
@@ -162,7 +162,7 @@ export function WordCard({
           {phonetic && (
             <button
               type="button"
-              aria-label={`朗读 ${word.lemma}`}
+              aria-label={`Speak ${word.lemma}`}
               onClick={() => speak(word.lemma)}
               className="min-w-0 truncate text-xs text-muted-foreground/70 transition-colors hover:text-primary"
             >
@@ -177,8 +177,8 @@ export function WordCard({
             size="icon-sm"
             className={cn('shrink-0', armed && 'text-destructive')}
             disabled={deleting}
-            aria-label={armed ? `确认删除 ${word.lemma}` : `删除 ${word.lemma}`}
-            title={armed ? '再点一次就删掉（连同原句和复习进度）' : '删除这个词'}
+            aria-label={armed ? `Confirm delete ${word.lemma}` : `Delete ${word.lemma}`}
+            title={armed ? 'Tap again to delete (along with its examples and review progress)' : 'Delete this word'}
             onClick={() => void remove()}
           >
             <Trash2 className="size-3.5" />
@@ -204,7 +204,7 @@ export function WordCard({
             size="icon-sm"
             className="-mt-1 shrink-0"
             aria-pressed={revealed}
-            aria-label={revealed ? '隐藏中文' : '显示中文'}
+            aria-label={revealed ? 'Hide Chinese' : 'Show Chinese'}
             onClick={onToggleReveal}
           >
             {revealed ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
@@ -241,7 +241,7 @@ export function WordCard({
  */
 function FrequencyBar({ zipf }: { zipf: number | null }) {
   const band = frequencyBand(zipf);
-  const title = zipf === null ? '词频未收录' : `${band.label} · Zipf ${zipf.toFixed(2)}`;
+  const title = zipf === null ? 'Frequency not listed' : `${band.label} · Zipf ${zipf.toFixed(2)}`;
 
   if (band.level === 0) {
     return (

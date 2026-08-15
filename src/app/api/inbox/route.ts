@@ -47,7 +47,7 @@ export async function POST(request: Request) {
       category_id?: unknown;
     };
     if (typeof body.raw_text !== 'string' || body.raw_text.trim().length === 0) {
-      return NextResponse.json({ error: 'raw_text 不能为空' }, { status: 400 });
+      return NextResponse.json({ error: 'raw_text cannot be empty' }, { status: 400 });
     }
     rawText = body.raw_text;
     if (typeof body.source === 'string' && body.source.length > 0) source = body.source;
@@ -55,11 +55,11 @@ export async function POST(request: Request) {
     if (body.category_id !== undefined && body.category_id !== null) {
       categoryId = parseCategoryId(body.category_id);
       if (!categoryId) {
-        return NextResponse.json({ error: 'category_id 必须是分类 id' }, { status: 400 });
+        return NextResponse.json({ error: 'category_id must be a category id' }, { status: 400 });
       }
     }
   } catch {
-    return NextResponse.json({ error: 'body 必须是 JSON' }, { status: 400 });
+    return NextResponse.json({ error: 'body must be JSON' }, { status: 400 });
   }
 
   // 拆行：逐行 trim、丢掉空行。
@@ -70,7 +70,7 @@ export async function POST(request: Request) {
     : [rawText.trim()];
 
   if (texts.length === 0) {
-    return NextResponse.json({ error: 'raw_text 不能为空' }, { status: 400 });
+    return NextResponse.json({ error: 'raw_text cannot be empty' }, { status: 400 });
   }
 
   const db = getDb();
@@ -82,7 +82,7 @@ export async function POST(request: Request) {
       .where(eq(categories.id, categoryId))
       .limit(1);
     if (!found) {
-      return NextResponse.json({ error: '分类不存在' }, { status: 400 });
+      return NextResponse.json({ error: 'Category not found' }, { status: 400 });
     }
   }
 

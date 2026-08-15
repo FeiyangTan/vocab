@@ -58,7 +58,7 @@ export function ContrastEditor({
   return (
     <div className="flex flex-wrap items-center gap-2 text-sm">
       {!compact && value.length > 0 && (
-        <span className="text-xs text-muted-foreground">对比词</span>
+        <span className="text-xs text-muted-foreground">Confusables</span>
       )}
 
       {/*
@@ -79,7 +79,7 @@ export function ContrastEditor({
             <button
               type="button"
               onClick={() => onChange(value.filter((w) => w !== word))}
-              aria-label={`删除 ${word}`}
+              aria-label={`Remove ${word}`}
               disabled={busy}
               className="px-0.5 text-muted-foreground/50 hover:text-foreground"
             >
@@ -105,7 +105,7 @@ export function ContrastEditor({
               setAdding(false);
             }
           }}
-          placeholder="相近的词"
+          placeholder="a similar word"
           className="h-7 w-32 rounded-sm px-2 font-serif text-[15px] italic"
         />
       ) : (
@@ -113,11 +113,11 @@ export function ContrastEditor({
           type="button"
           onClick={() => setAdding(true)}
           disabled={busy || value.length >= MAX_CONTRASTS}
-          aria-label="添加对比词"
+          aria-label="Add a confusable"
           className="inline-flex items-center gap-1 rounded-sm border border-dashed px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30"
         >
           <Plus className="size-3" />
-          {value.length === 0 && '对比词'}
+          {value.length === 0 && 'Confusables'}
         </button>
       )}
     </div>
@@ -149,7 +149,7 @@ function ChipButton({ word, gloss }: { word: string; gloss?: string }) {
         // 查不到中文的词只发音，不留一个点了没反应的展开态
         if (gloss) setOpen((v) => !v);
       }}
-      aria-label={gloss ? `朗读 ${word}，并${open ? '收起' : '展开'}释义` : `朗读 ${word}`}
+      aria-label={gloss ? `Speak ${word} and ${open ? 'hide' : 'show'} its gloss` : `Speak ${word}`}
       aria-expanded={gloss ? open : undefined}
       className="font-serif text-[15px] italic text-primary underline decoration-border underline-offset-4 transition-colors hover:decoration-primary"
     >

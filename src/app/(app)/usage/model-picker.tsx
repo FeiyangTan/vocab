@@ -41,7 +41,7 @@ export function ModelPicker({ current }: { current: Record<Purpose, ModelId> }) 
     if (!response.ok) {
       setValue((v) => ({ ...v, [purpose]: previous }));
       const data = (await response.json().catch(() => ({}))) as { error?: string };
-      setError(data.error ?? '保存失败');
+      setError(data.error ?? 'Failed to save');
       return;
     }
     // 下面的花费统计按模型分组，换完刷一下才对得上
@@ -52,7 +52,7 @@ export function ModelPicker({ current }: { current: Record<Purpose, ModelId> }) 
     <section>
       <div className="border-t border-border pt-4">
         <div className="mb-3 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-          模型
+          Model
         </div>
 
         <div className="space-y-3">
@@ -79,7 +79,7 @@ export function ModelPicker({ current }: { current: Record<Purpose, ModelId> }) 
                     >
                       {choice.tier}
                       <span className="ml-1.5 text-[11px] tabular-nums opacity-60">
-                        {choice.note.split('（')[0]}
+                        {choice.note.split(' (')[0]}
                       </span>
                     </button>
                   );
@@ -95,9 +95,10 @@ export function ModelPicker({ current }: { current: Record<Purpose, ModelId> }) 
         {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
 
         <p className="mt-3 text-xs text-muted-foreground">
-          改完<strong className="font-medium">下一次</strong>调用就生效（不缓存）。
-          整理草稿是质量关键路径 —— 它要生成能和原句对齐的挖空句，降太狠会让句子里
-          变形词的高亮失效；对比词那条风险低，同音词本来就不是模型算的。
+          Takes effect on the <strong className="font-medium">next</strong> call (not cached).
+          Draft is the quality-critical path — it produces the cloze that must align with the
+          original sentence; downgrading too far breaks the inflected-word highlight.
+          Confusables is low risk: homophones aren’t computed by the model anyway.
         </p>
       </div>
     </section>

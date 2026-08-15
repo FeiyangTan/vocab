@@ -21,7 +21,7 @@ export default async function TriagePage({
   if (scope === null) notFound();
 
   if (scope === 'all') {
-    return <TriageSession scope="all" name="全部" pushBack={PUSH_BACK} />;
+    return <TriageSession scope="all" name="All" pushBack={PUSH_BACK} />;
   }
 
   const [category] = await getDb()

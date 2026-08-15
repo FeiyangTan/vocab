@@ -39,7 +39,7 @@ export async function getModel(purpose: Purpose): Promise<ModelId> {
       .limit(1);
     return isValidModel(row?.value) ? row.value : DEFAULT_MODEL[purpose];
   } catch (error) {
-    console.error('[settings] 读设置失败，用默认值:', error);
+    console.error('[settings] failed to read settings, falling back to defaults:', error);
     return DEFAULT_MODEL[purpose];
   }
 }

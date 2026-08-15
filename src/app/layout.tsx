@@ -22,7 +22,7 @@ const newsreader = Newsreader({
 
 export const metadata: Metadata = {
   title: "vocab",
-  description: "个人英语单词记录与复习",
+  description: "Capture and review English vocabulary",
   // iPhone「添加到主屏」后以独立 App 形式全屏运行，没有 Safari 的地址栏
   appleWebApp: { capable: true, title: "vocab", statusBarStyle: "black-translucent" },
   other: {

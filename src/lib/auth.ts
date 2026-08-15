@@ -15,7 +15,7 @@ const SESSION_PAYLOAD = 'vocab-session-v1';
 
 function requireSecret(): string {
   const secret = process.env.AUTH_SECRET;
-  if (!secret) throw new Error('AUTH_SECRET 未配置');
+  if (!secret) throw new Error('AUTH_SECRET is not configured');
   return secret;
 }
 
@@ -56,7 +56,7 @@ export async function isValidSession(value: string | undefined): Promise<boolean
 /** 校验 /api/inbox?t=... 的 token。捕获接口走 token，不走 cookie。 */
 export function isValidInboxToken(value: string | null): boolean {
   const expected = process.env.INBOX_TOKEN;
-  if (!expected) throw new Error('INBOX_TOKEN 未配置');
+  if (!expected) throw new Error('INBOX_TOKEN is not configured');
   if (!value) return false;
   return safeEqual(value, expected);
 }

@@ -10,10 +10,10 @@
  */
 
 export const GRADES = [
-  { grade: 0, label: '不会', hint: '完全没印象' },
-  { grade: 1, label: '勉强', hint: '想了很久' },
-  { grade: 2, label: '记得', hint: '有点犹豫' },
-  { grade: 3, label: '秒答', hint: '毫不费力' },
+  { grade: 0, label: 'Again', hint: 'No idea at all' },
+  { grade: 1, label: 'Hard', hint: 'Took a long time' },
+  { grade: 2, label: 'Good', hint: 'A little hesitation' },
+  { grade: 3, label: 'Easy', hint: 'Instant' },
 ] as const;
 
 const Q_BY_GRADE = [0, 3, 4, 5] as const;
